@@ -13,7 +13,6 @@ class SurfaceDetector(Node):
     def __init__(self):
         super().__init__('surface_detector')
         self.get_logger().info('Surface Detector Node has been started.')
-        self.set_parameters([{'use_sim_time': True}])
         
 
         qos_profile_best_effort = QoSProfile(
@@ -50,6 +49,7 @@ class SurfaceDetector(Node):
         header = Header()
         header.frame_id = "base_footprint"
         header.stamp = self.get_clock().now().to_msg()
+        drawing_points.header = header
 
         for i in range(NUM_POINTS + 1):
             pose = Pose()

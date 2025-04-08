@@ -56,6 +56,16 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
 
     launch_description.add_action(moveit_rviz)
 
+    surfeace_detection = Node(
+        package='surface_detection',
+        executable='surface_detector',
+        name='surface_detector',
+        parameters=[{
+            'use_sim_time': True 
+        }]
+    )
+    launch_description.add_action(surfeace_detection)
+
     return
 
 
