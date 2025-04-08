@@ -10,6 +10,8 @@ find_package(ament_cmake REQUIRED)
 find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(moveit_visual_tools REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2 REQUIRED)
 
 add_executable(draw_circle src/draw_circle.cpp)
 target_include_directories(draw_circle PUBLIC
@@ -21,9 +23,12 @@ ament_target_dependencies(
   "moveit_ros_planning_interface"
   "rclcpp"
   "moveit_visual_tools"
+  "tf2_geometry_msgs"
+  "tf2"
 )
 
-install(TARGETS draw_circle
+install(TARGETS 
+  draw_circle
   DESTINATION lib/${PROJECT_NAME})
 
   # Install launch files.
