@@ -62,7 +62,7 @@ class SurfaceDetector(Node):
             drawing_points.poses.append(pose)
         
         self.drawing_points_pub.publish(drawing_points)
-        self.get_logger().info('Drawing points calculated and published.')
+        #self.get_logger().info('Drawing points calculated and published.')
 
 
 def main(args=None):

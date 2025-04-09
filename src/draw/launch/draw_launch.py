@@ -66,6 +66,22 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
     )
     launch_description.add_action(surfeace_detection)
 
+    whiteboard = Node(
+            package='gazebo_ros',
+            executable='spawn_entity.py',
+            name='spawn_whiteboard',
+            arguments=[
+                '-entity', 'whiteboard',
+                '-file', '/home/user/exchange/TIAGoPro_WS/src/draw/models/whiteboard.sdf',
+                '-x', '1.25',
+                '-y', '0',
+                '-z', '0',
+                '-Y', '1.5708'
+            ],
+            output='screen'
+    )
+    launch_description.add_action(whiteboard)
+
     return
 
 

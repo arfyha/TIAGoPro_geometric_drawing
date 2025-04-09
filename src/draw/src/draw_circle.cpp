@@ -1,5 +1,4 @@
 #include <memory>
-#include <thread>
 #include <vector>
 #include <iterator>
 #include <cmath>
@@ -7,7 +6,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
-#include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2/LinearMath/Quaternion.h>
 
@@ -48,10 +46,10 @@ private:
   geometry_msgs::msg::Quaternion q_msg_;
 
   const double radius_ = 0.2;
-  const double center_x_ = 0.5;
+  const double center_x_ = 0.6;
   const double center_y_ = -0.17;
   const double center_z_ = 0.75;
-  const int num_points_ = 10;
+  const int num_points_ = 100;
 
   void initializeOrientation() {
     tf2::Quaternion q;
