@@ -18,10 +18,11 @@ static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
 
 class DrawCircleNode : public rclcpp::Node {
 public:
-  DrawCircleNode()
-    : Node(NODE_NAME, rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)) {
+  DrawCircleNode(): Node(NODE_NAME, rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)) {
     // Set use_sim_time = true
     //this->declare_parameter("use_sim_time", true);
+    drawing_positions_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
+      "/drawing_positions", 10, std::bind(&DrawCircleNode::drawCircle, this, std::placeholders::_1));
   }
 
   void initialize() {
@@ -35,14 +36,12 @@ public:
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
 
-    initializeOrientation();
-    //addOrientationConstraint();
     logBasicInfo();
-    drawCircle();
   }
 
 private:
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_interface_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr drawing_positions_sub_;
   std::shared_ptr<moveit_visual_tools::MoveItVisualTools> visual_tools_;
   moveit_msgs::msg::Constraints orientation_constraints_;
   geometry_msgs::msg::Quaternion q_msg_;
@@ -53,13 +52,6 @@ private:
   const double center_z_ = 0.75;
   const int num_points_ = 90;
 
-  void initializeOrientation() {
-    tf2::Quaternion q;
-    q.setRPY(0, M_PI / 2, 0);
-    q.normalize();
-    q_msg_ = tf2::toMsg(q);
-  }
-
   void logBasicInfo() {
     RCLCPP_INFO(this->get_logger(), "Planning frame: %s", move_group_interface_->getPlanningFrame().c_str());
     RCLCPP_INFO(this->get_logger(), "End effector link: %s", move_group_interface_->getEndEffectorLink().c_str());
@@ -69,31 +61,6 @@ private:
     }
   }
 
-  void addOrientationConstraint() {
-    moveit_msgs::msg::OrientationConstraint ocm;
-    ocm.header.frame_id = move_group_interface_->getPoseReferenceFrame();
-    ocm.link_name = move_group_interface_->getEndEffectorLink();
-    ocm.orientation = q_msg_;
-    ocm.absolute_x_axis_tolerance = M_PI;
-    ocm.absolute_y_axis_tolerance = 0.2;
-    ocm.absolute_z_axis_tolerance = 0.2;
-    ocm.weight = 1.0;
-
-    orientation_constraints_.orientation_constraints.push_back(ocm);
-  }
-
-  geometry_msgs::msg::Pose calculatePose(int i) {
-    double angle = 2 * M_PI * i / num_points_;
-
-    geometry_msgs::msg::Pose pose;
-    pose.position.x = center_x_;
-    pose.position.y = center_y_ + radius_ * std::cos(angle);
-    pose.position.z = center_z_ + radius_ * std::sin(angle);
-    pose.orientation = q_msg_;
-
-    return pose;
-  }
-
   void drawTitle(const std::string &text) {
     Eigen::Isometry3d text_pose = Eigen::Isometry3d::Identity();
     text_pose.translation().x() = 1.0;
@@ -101,20 +68,24 @@ private:
     visual_tools_->publishText(text_pose, text, rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
   }
 
-  std::pair<bool, moveit::planning_interface::MoveGroupInterface::Plan> createPlan() {
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    bool success = (move_group_interface_->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
-    return std::make_pair(success, plan);
-  }
-
-  void drawCircle() {
+  void drawCircle(const geometry_msgs::msg::PoseArray &posearray) {
     std::vector<geometry_msgs::msg::Pose> waypoints;
-    for (int i = 0; i < num_points_; ++i) {
-      auto pose = calculatePose(i);
-      waypoints.push_back(pose);
+    for (size_t i = 0; i < posearray.poses.size(); ++i) {
+        RCLCPP_INFO(this->get_logger(), "Pose added position: x:%f y:%f z:%f \n orientation: x:%f y:%f z:%f w:%f",
+            posearray.poses[i].position.x, posearray.poses[i].position.y, posearray.poses[i].position.z,
+            posearray.poses[i].orientation.x, posearray.poses[i].orientation.y, posearray.poses[i].orientation.z, posearray.poses[i].orientation.w);
+        auto pose = posearray.poses.at(i);
+        waypoints.push_back(pose);
     }
 
     waypoints.push_back(waypoints.front());
+
+    drawTitle("Plan_Cartesian_Path");
+    visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
+    for (std::size_t i = 0; i < waypoints.size(); ++i)
+        //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);
+        visual_tools_->trigger();
+        //visual_tools_->prompt("Press 'next' in the RvizVisualToolsGui window to continue the demo");
 
     move_group_interface_->setPlanningTime(30.0);
     move_group_interface_->setNumPlanningAttempts(100);
@@ -125,22 +96,16 @@ private:
     double fraction = 0.0;
     int attempt = 0;
     int max_attempts = 100;
+    double percentage = 0.9;
 
-    while(fraction < 0.9 && attempt < max_attempts) {
+    while(fraction < percentage && attempt < max_attempts) {
       fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
       RCLCPP_INFO(this->get_logger(), "Visualizing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
       attempt++;
     }
 
-    if (fraction >= 0.9) {
+    if (fraction >= percentage) {
         RCLCPP_INFO(this->get_logger(), "Successfully planned Cartesian path with %.2f%% coverage.", fraction * 100.0);
-
-        drawTitle("Plan_Cartesian_Path");
-        visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
-        for (std::size_t i = 0; i < waypoints.size(); ++i)
-            //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);
-            visual_tools_->trigger();
-            //visual_tools_->prompt("Press 'next' in the RvizVisualToolsGui window to continue the demo");
 
         drawTitle("Execute_Cartesian_Path");
         visual_tools_->trigger();
@@ -151,7 +116,7 @@ private:
 
         RCLCPP_INFO(this->get_logger(), "Circle drawn successfully.");
     } else {
-        RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
+        RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %i attempts.", attempt);
     }
   }
 };
@@ -160,7 +125,7 @@ int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
 
   auto node = std::make_shared<DrawCircleNode>();
-  node->initialize();  // <-- shared_from_this() is safe here
+  node->initialize();
   rclcpp::spin(node);
 
   rclcpp::shutdown();

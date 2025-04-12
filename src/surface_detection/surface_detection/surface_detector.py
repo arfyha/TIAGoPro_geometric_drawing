@@ -24,7 +24,7 @@ class SurfaceDetector(Node):
 
         #self.create_subscription(PointCloud2, '/head_front_camera/depth/color/points', self.surcafe_callback, qos_profile_best_effort)
 
-        self.drawing_points_pub = self.create_publisher(PoseArray, '/drawing_points', 10)
+        self.drawing_points_pub = self.create_publisher(PoseArray, '/drawing_positions', 10)
         self.timer = self.create_timer(1.0, self.calculate_drawing_points)
 
     def surcafe_callback(self, msg):
@@ -34,10 +34,10 @@ class SurfaceDetector(Node):
     def calculate_drawing_points(self):
         
         RADIUS = 0.2 # Radius of the circle
-        CENTER_X = 0.5 # X-coordinate of the circle's center
+        CENTER_X = 0.65 # X-coordinate of the circle's center
         CENTER_Y = -0.17  # Y-coordinate of the circle's center
         CENTER_Z = 0.75 # Z-coordinate of the circle's center 
-        NUM_POINTS = 10 # Number of points to generate on the circle
+        NUM_POINTS = 90 # Number of points to generate on the circle
         q = quaternion_from_euler(0, math.pi / 2, 0)
         q_msg = Quaternion()
         q_msg.x = q[0]
@@ -51,12 +51,12 @@ class SurfaceDetector(Node):
         header.stamp = self.get_clock().now().to_msg()
         drawing_points.header = header
 
-        for i in range(NUM_POINTS + 1):
+        for i in range(NUM_POINTS):
             pose = Pose()
             angle = i * 2 * math.pi / NUM_POINTS
-            pose.position.x = CENTER_X + RADIUS * math.cos(angle)
-            pose.position.y = CENTER_Y + RADIUS * math.sin(angle)
-            pose.position.z = CENTER_Z
+            pose.position.x = CENTER_X 
+            pose.position.y = CENTER_Y + RADIUS * math.cos(angle)
+            pose.position.z = CENTER_Z + RADIUS * math.sin(angle)
             pose.orientation = q_msg
             # Append the points to the drawing_points array
             drawing_points.poses.append(pose)
