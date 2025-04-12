@@ -13,6 +13,8 @@ static const std::string NODE_NAME = "draw_circle";
 static const std::string PLANNING_GROUP = "arm_right";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
+//head_2_joint = -0.23
+//torso_joint = 0.25
 
 class DrawCircleNode : public rclcpp::Node {
 public:
@@ -34,7 +36,7 @@ public:
     visual_tools_->loadRemoteControl();
 
     initializeOrientation();
-    addOrientationConstraint();
+    //addOrientationConstraint();
     logBasicInfo();
     drawCircle();
   }
@@ -49,7 +51,7 @@ private:
   const double center_x_ = 0.6;
   const double center_y_ = -0.17;
   const double center_z_ = 0.75;
-  const int num_points_ = 100;
+  const int num_points_ = 90;
 
   void initializeOrientation() {
     tf2::Quaternion q;
@@ -106,34 +108,37 @@ private:
   }
 
   void drawCircle() {
-    visual_tools_->trigger();
-    for (int i = 0; i <= num_points_; ++i) {
-      auto pose = calculatePose(i % num_points_);
-      move_group_interface_->setPoseTarget(pose);
-
-      if (i == 0) {
-        move_group_interface_->clearPathConstraints();
-      } else {
-        move_group_interface_->setPathConstraints(orientation_constraints_);
-      }
-
-      RCLCPP_INFO(this->get_logger(), "Planning to pose %d: x=%f, y=%f, z=%f", i, pose.position.x, pose.position.y, pose.position.z);
-      drawTitle("Planning_position_" + std::to_string(i));
-      visual_tools_->trigger();
-
-      auto [success, plan] = createPlan();
-      if (success) {
-        visual_tools_->publishTrajectoryLine(plan.trajectory_, move_group_interface_->getRobotModel()->getJointModelGroup(PLANNING_GROUP));
-        visual_tools_->publishAxisLabeled(pose, "position_" + std::to_string(i));
-        drawTitle("Executing_plan_" + std::to_string(i));
-        visual_tools_->trigger();
-        move_group_interface_->execute(plan);
-      } else {
-        drawTitle("Planning_Failed");
-        visual_tools_->trigger();
-        RCLCPP_ERROR(this->get_logger(), "Planning failed for point %d", i);
-      }
+    std::vector<geometry_msgs::msg::Pose> waypoints;
+    for (int i = 0; i < num_points_; ++i) {
+      auto pose = calculatePose(i);
+      waypoints.push_back(pose);
     }
+
+    waypoints.push_back(waypoints.front());
+
+    move_group_interface_->setPlanningTime(30.0);
+    move_group_interface_->setNumPlanningAttempts(100);
+
+    moveit_msgs::msg::RobotTrajectory trajectory;
+    const double jump_threshold = 0.0;
+    const double eef_step = 0.01;
+    double fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
+    RCLCPP_INFO(this->get_logger(), "Visualizing plan 4 (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
+
+    drawTitle("Plan_Cartesian_Path");
+    visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
+    for (std::size_t i = 0; i < waypoints.size(); ++i)
+      //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);
+    visual_tools_->trigger();
+    //visual_tools_->prompt("Press 'next' in the RvizVisualToolsGui window to continue the demo");
+    
+    drawTitle("Execute_Cartesian_Path");
+    visual_tools_->trigger();
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+      plan.trajectory_ = trajectory; 
+    move_group_interface_->execute(plan);
+    RCLCPP_INFO(this->get_logger(), "Circle drawn successfully");
+
   }
 };
 
