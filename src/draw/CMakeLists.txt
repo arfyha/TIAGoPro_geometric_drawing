@@ -13,13 +13,26 @@ find_package(moveit_visual_tools REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 
-add_executable(draw_circle src/draw_circle.cpp)
-target_include_directories(draw_circle PUBLIC
+add_executable(draw_circle_air src/draw_circle_air.cpp)
+add_executable(draw_circle_whiteboard src/draw_circle_whiteboard.cpp)
+target_include_directories(draw_circle_air PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_compile_features(draw_circle PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
+  target_include_directories(draw_circle_whiteboard PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+target_compile_features(draw_circle_air PUBLIC c_std_99 cxx_std_17)
+target_compile_features(draw_circle_whiteboard PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
-  draw_circle
+  draw_circle_air
+  "moveit_ros_planning_interface"
+  "rclcpp"
+  "moveit_visual_tools"
+  "tf2_geometry_msgs"
+  "tf2"
+)
+ament_target_dependencies(
+  draw_circle_whiteboard
   "moveit_ros_planning_interface"
   "rclcpp"
   "moveit_visual_tools"
@@ -28,7 +41,8 @@ ament_target_dependencies(
 )
 
 install(TARGETS 
-  draw_circle
+  draw_circle_air
+  draw_circle_whiteboard
   DESTINATION lib/${PROJECT_NAME})
 
   # Install launch files.

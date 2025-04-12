@@ -122,22 +122,37 @@ private:
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
     const double eef_step = 0.01;
-    double fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
-    RCLCPP_INFO(this->get_logger(), "Visualizing plan 4 (Cartesian path) (%.2f%% achieved)", fraction * 100.0);
+    double fraction = 0.0;
+    int attempt = 0;
+    int max_attempts = 100;
 
-    drawTitle("Plan_Cartesian_Path");
-    visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
-    for (std::size_t i = 0; i < waypoints.size(); ++i)
-      //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);
-    visual_tools_->trigger();
-    //visual_tools_->prompt("Press 'next' in the RvizVisualToolsGui window to continue the demo");
-    
-    drawTitle("Execute_Cartesian_Path");
-    visual_tools_->trigger();
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-      plan.trajectory_ = trajectory; 
-    move_group_interface_->execute(plan);
-    RCLCPP_INFO(this->get_logger(), "Circle drawn successfully");
+    while(fraction < 0.9 && attempt < max_attempts) {
+      fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
+      RCLCPP_INFO(this->get_logger(), "Visualizing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
+      attempt++;
+    }
+
+    if (fraction >= 0.9) {
+        RCLCPP_INFO(this->get_logger(), "Successfully planned Cartesian path with %.2f%% coverage.", fraction * 100.0);
+
+        drawTitle("Plan_Cartesian_Path");
+        visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
+        for (std::size_t i = 0; i < waypoints.size(); ++i)
+            //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);
+            visual_tools_->trigger();
+            //visual_tools_->prompt("Press 'next' in the RvizVisualToolsGui window to continue the demo");
+
+        drawTitle("Execute_Cartesian_Path");
+        visual_tools_->trigger();
+
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        plan.trajectory_ = trajectory;
+        move_group_interface_->execute(plan);
+
+        RCLCPP_INFO(this->get_logger(), "Circle drawn successfully.");
+    } else {
+        RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
+    }
 
   }
 };
