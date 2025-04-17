@@ -25,7 +25,6 @@ public:
   }
 
   void initialize() {
-    // Use node shared_ptr now that it's safe
     move_group_interface_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(shared_from_this(), PLANNING_GROUP);
     visual_tools_ = std::make_shared<moveit_visual_tools::MoveItVisualTools>(
       shared_from_this(), BASE_FRAME, rviz_visual_tools::RVIZ_MARKER_TOPIC,
@@ -51,7 +50,7 @@ private:
   const double center_x_ = 0.6;
   const double center_y_ = -0.17;
   const double center_z_ = 0.75;
-  const int num_points_ = 90;
+  const int num_points_ = 360;
 
   void initializeOrientation() {
     tf2::Quaternion q;
@@ -121,14 +120,15 @@ private:
 
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
-    const double eef_step = 0.01;
+    const double eef_step = 0.001;
     double fraction = 0.0;
     int attempt = 0;
     int max_attempts = 100;
 
     while(fraction < 0.9 && attempt < max_attempts) {
+      move_group_interface_->setStartStateToCurrentState();
       fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
-      RCLCPP_INFO(this->get_logger(), "Visualizing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
+      RCLCPP_INFO(this->get_logger(), "Computing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
       attempt++;
     }
 
