@@ -37,7 +37,7 @@ class SurfaceDetector(Node):
         CENTER_X = 0.65 # X-coordinate of the circle's center
         CENTER_Y = -0.17  # Y-coordinate of the circle's center
         CENTER_Z = 0.75 # Z-coordinate of the circle's center 
-        NUM_POINTS = 90 # Number of points to generate on the circle
+        NUM_POINTS = 360 # Number of points to generate on the circle
         q = quaternion_from_euler(0, math.pi / 2, 0)
         q_msg = Quaternion()
         q_msg.x = q[0]
@@ -60,6 +60,8 @@ class SurfaceDetector(Node):
             pose.orientation = q_msg
             # Append the points to the drawing_points array
             drawing_points.poses.append(pose)
+
+        drawing_points.poses.append(drawing_points.poses[0])
         
         self.drawing_points_pub.publish(drawing_points)
         #self.get_logger().info('Drawing points calculated and published.')

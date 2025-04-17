@@ -51,12 +51,13 @@ private:
 
   void drawCircle(const geometry_msgs::msg::PoseArray &posearray) {
     std::vector<geometry_msgs::msg::Pose> waypoints;
-    for (size_t i = 0; i < posearray.poses.size(); ++i) {
-        auto pose = posearray.poses.at(i);
+    //for (size_t i = 0; i < posearray.poses.size(); ++i) {
+      //  auto pose = posearray.poses.at(i);
+        //waypoints.push_back(pose);
+    //}
+    for (auto &pose : posearray.poses) {
         waypoints.push_back(pose);
     }
-
-    waypoints.push_back(waypoints.front());
 
     drawTitle("Plan_Cartesian_Path");
     visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
@@ -93,12 +94,11 @@ private:
         move_group_interface_->execute(plan);
 
         RCLCPP_INFO(this->get_logger(), "Circle drawn successfully.");
-
-        rclcpp::shutdown();
-        return;
     } else {
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %i attempts.", attempt);
     }
+    rclcpp::shutdown();
+    return;
   }
 };
 
