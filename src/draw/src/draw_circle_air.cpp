@@ -54,7 +54,7 @@ private:
 
   void initializeOrientation() {
     tf2::Quaternion q;
-    q.setRPY(0, M_PI / 2, 0);
+    q.setRPY(M_PI / 2, 0, M_PI / 2);
     q.normalize();
     q_msg_ = tf2::toMsg(q);
   }
