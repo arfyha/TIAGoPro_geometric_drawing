@@ -24,7 +24,7 @@ class LaunchArguments(LaunchArgumentsBase):
     navigation: DeclareLaunchArgument = CommonArgs.navigation
     advanced_navigation: DeclareLaunchArgument = CommonArgs.advanced_navigation
     slam: DeclareLaunchArgument = CommonArgs.slam
-    #docking: DeclareLaunchArgument = CommonArgs.docking
+    docking: DeclareLaunchArgument = CommonArgs.docking
     moveit: DeclareLaunchArgument = CommonArgs.moveit
     world_name: DeclareLaunchArgument = CommonArgs.world_name
     tuck_arm: DeclareLaunchArgument = CommonArgs.tuck_arm
@@ -40,9 +40,10 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
             'navigation': launch_args.navigation,
             'advanced_navigation': launch_args.advanced_navigation,
             'slam': launch_args.slam,
-            #'docking': launch_args.docking,
+            'docking': launch_args.docking,
             'moveit': launch_args.moveit,
-            'world_name': "empty",
+            'world_name': launch_args.world_name#"empty"
+            ,
             'tuck_arm': launch_args.tuck_arm,
             'is_public_sim': launch_args.is_public_sim
         })
