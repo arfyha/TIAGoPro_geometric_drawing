@@ -59,7 +59,7 @@ private:
         waypoints.push_back(pose);
     }
 
-    drawTitle("Plan_Cartesian_Path");
+  drawTitle("Plan_Cartesian_Path");
     visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
     for (std::size_t i = 0; i < waypoints.size(); ++i)
         //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);

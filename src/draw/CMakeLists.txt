@@ -18,7 +18,7 @@ add_executable(draw_circle_whiteboard src/draw_circle_whiteboard.cpp)
 target_include_directories(draw_circle_air PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-  target_include_directories(draw_circle_whiteboard PUBLIC
+target_include_directories(draw_circle_whiteboard PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_compile_features(draw_circle_air PUBLIC c_std_99 cxx_std_17)
