@@ -24,31 +24,25 @@ class VoxelFilterNode : public rclcpp::Node
 {
 public:
     VoxelFilterNode() : Node("voxel_filter_node", rclcpp::NodeOptions()
-    .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
     {
-        
-        
 
         pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/filtered_cloud", 10);
-
 
         /*
          * SET UP PARAMETERS (COULD BE INPUT FROM LAUNCH FILE/TERMINAL)
          */
-        rclcpp::Parameter cloud_topic_param, world_frame_param, camera_frame_param, voxel_leaf_size_param;
-
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/head_front_camera/depth/color/points"));
-        this->get_parameter_or("world_frame", world_frame_param, rclcpp::Parameter("", "base_footprint"));
-        this->get_parameter_or("camera_frame", camera_frame_param, rclcpp::Parameter("", "head_front_camera_depth_optical_frame"));
-        this->get_parameter_or("voxel_leaf_size", voxel_leaf_size_param, rclcpp::Parameter("", 0.05));
+        this->declare_parameter<std::string>("cloud_topic", "/head_front_camera/depth/color/points");
+        this->declare_parameter<std::string>("world_frame", "base_footprint");
+        this->declare_parameter<std::string>("camera_frame", "head_front_camera_depth_optical_frame");
+        this->declare_parameter<float>("voxel_leaf_size", 0.05f);
 
-        cloud_topic     = cloud_topic_param.as_string();
-        world_frame     = world_frame_param.as_string();
-        camera_frame    = camera_frame_param.as_string();
-        voxel_leaf_size = float(voxel_leaf_size_param.as_double());
+        cloud_topic = this->get_parameter("cloud_topic").as_string();
+        world_frame = this->get_parameter("world_frame").as_string();
+        camera_frame = this->get_parameter("camera_frame").as_string();
+        voxel_leaf_size = this->get_parameter("voxel_leaf_size").as_double();
 
         /*
          * SET UP SUBSCRIBER
@@ -116,19 +110,20 @@ private:
 
         // Convert ROS2 msg to PCL PointCloud
         pcl::PCLPointCloud2::Ptr pcl_cloud(new pcl::PCLPointCloud2());
-        pcl_conversions::toPCL(*point_cloud_msg, *pcl_cloud);
+        pcl_conversions::toPCL(transformed_cloud, *pcl_cloud);
 
         // VoxelGrid filter
         pcl::PCLPointCloud2::Ptr pcl_filtered(new pcl::PCLPointCloud2());
         pcl::VoxelGrid<pcl::PCLPointCloud2> voxel_filter;
         voxel_filter.setInputCloud(pcl_cloud);
-        voxel_filter.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size); // 5 cm voxel grid
+        voxel_filter.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
         voxel_filter.filter(*pcl_filtered);
 
         // Convert back to ROS2 PointCloud2
         sensor_msgs::msg::PointCloud2 output;
         pcl_conversions::fromPCL(*pcl_filtered, output);
-        output.header = point_cloud_msg->header;
+        output.header.stamp = point_cloud_msg->header.stamp;
+        output.header.frame_id = world_frame;
 
         pub_->publish(output);
     }
