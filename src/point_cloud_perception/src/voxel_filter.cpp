@@ -18,6 +18,7 @@
 #include <pcl/filters/voxel_grid.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl_ros/transforms.hpp>
+#include <pcl/filters/statistical_outlier_removal.h>
 
 
 class VoxelFilterNode : public rclcpp::Node
@@ -27,7 +28,7 @@ public:
     .automatically_declare_parameters_from_overrides(true))
     {
 
-        pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/filtered_cloud", 10);
+        pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/voxel_filtered_cloud", 10);
 
         /*
          * SET UP PARAMETERS (COULD BE INPUT FROM LAUNCH FILE/TERMINAL)
@@ -36,24 +37,23 @@ public:
 
         this->declare_parameter<std::string>("cloud_topic", "/head_front_camera/depth/color/points");
         this->declare_parameter<std::string>("world_frame", "base_footprint");
-        this->declare_parameter<std::string>("camera_frame", "head_front_camera_depth_optical_frame");
-        this->declare_parameter<float>("voxel_leaf_size", 0.05f);
+        this->declare_parameter<float>("voxel_leaf_size", 0.02f);
 
         cloud_topic = this->get_parameter("cloud_topic").as_string();
         world_frame = this->get_parameter("world_frame").as_string();
-        camera_frame = this->get_parameter("camera_frame").as_string();
         voxel_leaf_size = this->get_parameter("voxel_leaf_size").as_double();
 
         /*
          * SET UP SUBSCRIBER
          */
+
+         rclcpp::QoS qos_settings = rclcpp::SensorDataQoS()
+            .keep_last(5)  // Reduced from 300
+            .best_effort();
+
         sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
                     cloud_topic,
-                    rclcpp::QoS(rclcpp::QoSInitialization::from_rmw(rmw_qos_profile_sensor_data))
-                        .reliability(RMW_QOS_POLICY_RELIABILITY_BEST_EFFORT)
-                        .history(RMW_QOS_POLICY_HISTORY_KEEP_LAST)
-                        .durability(RMW_QOS_POLICY_DURABILITY_VOLATILE)
-                        .keep_last(300),
+                    qos_settings,
                     std::bind(&VoxelFilterNode::pointCloudCallback, this, std::placeholders::_1)
                 );
 
@@ -81,7 +81,6 @@ private:
      */
     std::string cloud_topic;
     std::string world_frame;
-    std::string camera_frame;
 
     float voxel_leaf_size;
 
@@ -96,40 +95,59 @@ private:
     {
 
         // Transform for pointcloud in world frame
-        geometry_msgs::msg::TransformStamped stransform;
+        geometry_msgs::msg::TransformStamped transform;
 
         try {
-            stransform = tf_buffer_->lookupTransform(world_frame, point_cloud_msg->header.frame_id,
-                tf2::TimePointZero, tf2::durationFromSec(3));
+            transform = tf_buffer_->lookupTransform(world_frame, point_cloud_msg->header.frame_id,
+                tf2::TimePointZero, tf2::durationFromSec(0.1));
         }
         catch(const tf2::TransformException &ex) {
             RCLCPP_ERROR(this->get_logger(), "%s", ex.what());
         }
         sensor_msgs::msg::PointCloud2 transformed_cloud;
-        pcl_ros::transformPointCloud(world_frame, stransform, *point_cloud_msg, transformed_cloud);
+        pcl_ros::transformPointCloud(world_frame, transform, *point_cloud_msg, transformed_cloud);
 
         // Convert ROS2 msg to PCL PointCloud
-        pcl::PCLPointCloud2::Ptr pcl_cloud(new pcl::PCLPointCloud2());
-        pcl_conversions::toPCL(transformed_cloud, *pcl_cloud);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::fromROSMsg(transformed_cloud, *cloud);
 
-        // VoxelGrid filter
-        pcl::PCLPointCloud2::Ptr pcl_filtered(new pcl::PCLPointCloud2());
-        pcl::VoxelGrid<pcl::PCLPointCloud2> voxel_filter;
-        voxel_filter.setInputCloud(pcl_cloud);
-        voxel_filter.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
-        voxel_filter.filter(*pcl_filtered);
+        cloud = preprocess(cloud);
 
         // Convert back to ROS2 PointCloud2
         sensor_msgs::msg::PointCloud2 output;
-        pcl_conversions::fromPCL(*pcl_filtered, output);
-        output.header.stamp = point_cloud_msg->header.stamp;
+        pcl::toROSMsg(*cloud, output);
+        output.header.stamp = this->now();
         output.header.frame_id = world_frame;
 
         pub_->publish(output);
     }
+    
+    pcl::PointCloud<pcl::PointXYZ>::Ptr preprocess(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud) {
 
+        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>);
+        
+        // Downsample
+        pcl::VoxelGrid<pcl::PointXYZ> voxel;
+        voxel.setInputCloud(point_cloud);
+        voxel.setLeafSize(voxel_leaf_size, voxel_leaf_size, voxel_leaf_size);
+        voxel.filter(*filtered);
     
+        // Remove noise
+        pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
+        sor.setInputCloud(filtered);
+        sor.setMeanK(50); // Neighbor points to analyze
+        sor.setStddevMulThresh(1.0); // Remove outliers
+        sor.filter(*filtered);
     
+        // Crop X-axis
+        pcl::PassThrough<pcl::PointXYZ> pass;
+        pass.setInputCloud(filtered);
+        pass.setFilterFieldName("x");
+        pass.setFilterLimits(0.0, 2.0);
+        pass.filter(*filtered);
+    
+        return filtered;
+    }
 };
 
 int main(int argc, char **argv)
