@@ -27,21 +27,21 @@ link_directories(${PCL_LIBRARY_DIRS})
 
 add_definitions(${PCL_DEFINITIONS})
 
-add_executable(voxel_filter src/voxel_filter.cpp)
-target_include_directories(voxel_filter PUBLIC
+add_executable(pre_process src/pre_process.cpp)
+target_include_directories(pre_process PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
-  ament_target_dependencies(voxel_filter rclcpp tf2_ros tf2 tf2_eigen sensor_msgs visualization_msgs geometry_msgs pcl_ros)
+  ament_target_dependencies(pre_process rclcpp tf2_ros tf2 tf2_eigen sensor_msgs visualization_msgs geometry_msgs pcl_ros)
 
 target_link_libraries(
-  voxel_filter
+  pre_process
   ${PCL_LIBRARIES}
 )
 
 
 install(TARGETS
-  voxel_filter
+  pre_process
   DESTINATION lib/${PROJECT_NAME})
 
 if(BUILD_TESTING)
