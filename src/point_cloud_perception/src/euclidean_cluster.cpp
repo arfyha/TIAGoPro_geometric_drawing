@@ -30,6 +30,7 @@ class EuclideanClusterNode : public rclcpp::Node
 {
 public:
     EuclideanClusterNode() : Node("euclidean_cluster_node", rclcpp::NodeOptions()
+    .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
     {
         /*
@@ -42,19 +43,21 @@ public:
         /*
          * SET UP PARAMETERS
          */
+        rclcpp::Parameter cloud_topic_param, world_frame_param, cluster_tolerance_param, min_cluster_size_param, max_cluster_size_param;
+
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        this->declare_parameter<std::string>("cloud_topic", "/pre_process_filtered_cloud");
-        this->declare_parameter<std::string>("world_frame", "base_footprint");
-        this->declare_parameter<double>("cluster_tolerance", 0.01);
-        this->declare_parameter<int>("min_cluster_size", 1);
-        this->declare_parameter<int>("max_cluster_size", 10000000);
+        this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/head_front_camera/depth/color/points"));
+        this->get_parameter_or("world_frame", world_frame_param, rclcpp::Parameter("", "base_footprint"));
+        this->get_parameter_or("cluster_tolerance", cluster_tolerance_param, rclcpp::Parameter("", 0.01));
+        this->get_parameter_or("min_cluster_size", min_cluster_size_param, rclcpp::Parameter("", 1));
+        this->get_parameter_or("max_cluster_size", max_cluster_size_param, rclcpp::Parameter("", 10000000));
 
-        cloud_topic = this->get_parameter("cloud_topic").as_string();
-        world_frame = this->get_parameter("world_frame").as_string();
-        cluster_tolerance = this->get_parameter("cluster_tolerance").as_double();
-        min_cluster_size = this->get_parameter("min_cluster_size").as_int();
-        max_cluster_size = this->get_parameter("max_cluster_size").as_int();
+        cloud_topic = cloud_topic_param.as_string();
+        world_frame = world_frame_param.as_string();
+        cluster_tolerance = cluster_tolerance_param.as_double();
+        min_cluster_size = min_cluster_size_param.as_int();
+        max_cluster_size = max_cluster_size_param.as_int();
 
         /*
          * SET UP SUBSCRIBER

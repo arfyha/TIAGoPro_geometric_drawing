@@ -25,9 +25,9 @@ def generate_launch_description():
             executable='euclidean_cluster',
             name='euclidean_cluster',
             parameters=[{
-                'cloud_topic': '/head_front_camera/depth/color/points', #pre_process_filtered_cloud
+                #'cloud_topic': 'pre_process_filtered_cloud',
                 'world_frame': 'base_footprint',
-                'cluster_tolerance': 0.05,
+                'cluster_tolerance': 0.01,
                 'min_cluster_size': 100,
                 'max_cluster_size': 10000,
             }],

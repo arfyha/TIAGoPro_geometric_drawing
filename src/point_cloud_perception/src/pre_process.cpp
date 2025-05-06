@@ -25,6 +25,7 @@ class PreProcessNode : public rclcpp::Node
 {
 public:
     PreProcessNode() : Node("pre_process_node", rclcpp::NodeOptions()
+    .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
     {
         /*
@@ -40,27 +41,31 @@ public:
         /*
          * SET UP PARAMETERS
          */
+        rclcpp::Parameter cloud_topic_param, world_frame_param, voxel_leaf_size_param, 
+            x_filter_min_param, x_filter_max_param, y_filter_min_param, y_filter_max_param,
+            z_filter_min_param, z_filter_max_param;
+
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        this->declare_parameter<std::string>("cloud_topic", "/head_front_camera/depth/color/points");
-        this->declare_parameter<std::string>("world_frame", "base_footprint");
-        this->declare_parameter<double>("voxel_leaf_size", 0.01);
-        this->declare_parameter<double>("x_filter_min", -0.7);
-        this->declare_parameter<double>("x_filter_max", 5.0);
-        this->declare_parameter<double>("y_filter_min", -1.2);
-        this->declare_parameter<double>("y_filter_max", 1.2);
-        this->declare_parameter<double>("z_filter_min", -0.1);
-        this->declare_parameter<double>("z_filter_max", 1.8);
+        this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/head_front_camera/depth/color/points"));
+        this->get_parameter_or("world_frame", world_frame_param, rclcpp::Parameter("", "base_footprint"));
+        this->get_parameter_or("voxel_leaf_size", voxel_leaf_size_param, rclcpp::Parameter("", 0.05));
+        this->get_parameter_or("x_filter_min", x_filter_min_param, rclcpp::Parameter("", -10.0));
+        this->get_parameter_or("x_filter_max", x_filter_max_param, rclcpp::Parameter("", 10.0));
+        this->get_parameter_or("y_filter_min", y_filter_min_param, rclcpp::Parameter("", -10.0));
+        this->get_parameter_or("y_filter_max", y_filter_max_param, rclcpp::Parameter("", 10.0));
+        this->get_parameter_or("z_filter_min", z_filter_min_param, rclcpp::Parameter("", -10.0));
+        this->get_parameter_or("z_filter_max", z_filter_max_param, rclcpp::Parameter("", 10.0));
 
-        cloud_topic = this->get_parameter("cloud_topic").as_string();
-        world_frame = this->get_parameter("world_frame").as_string();
-        voxel_leaf_size = float(this->get_parameter("voxel_leaf_size").as_double());
-        x_filter_min = this->get_parameter("x_filter_min").as_double();
-        x_filter_max = this->get_parameter("x_filter_max").as_double();
-        y_filter_min = this->get_parameter("y_filter_min").as_double();
-        y_filter_max = this->get_parameter("y_filter_max").as_double();
-        z_filter_min = this->get_parameter("z_filter_min").as_double();
-        z_filter_max = this->get_parameter("z_filter_max").as_double();
+        cloud_topic = cloud_topic_param.as_string();
+        world_frame = world_frame_param.as_string();
+        voxel_leaf_size = float(voxel_leaf_size_param.as_double());
+        x_filter_min = x_filter_min_param.as_double();
+        x_filter_max = x_filter_max_param.as_double();
+        y_filter_min = y_filter_min_param.as_double();
+        y_filter_max = y_filter_max_param.as_double();
+        z_filter_min = z_filter_min_param.as_double();
+        z_filter_max = z_filter_max_param.as_double();
 
         /*
          * SET UP SUBSCRIBER
@@ -138,21 +143,21 @@ private:
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(transformed_cloud, *cloud);
         
+        // Publish voxel filtered cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_cloud = voxel_filter(cloud);
         this->publishPointCloud(voxel_pub_, *voxel_cloud);
-        //RCLCPP_INFO(this->get_logger(), "Voxel Filtered Cloud published.");
 
+        // Publish crop filtered cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr crop_cloud = crop_box_filter(cloud);
         this->publishPointCloud(crop_pub_, *crop_cloud);
-        //RCLCPP_INFO(this->get_logger(), "Crop Box Filtered Cloud published.");
 
+        // Publish SOR filtered cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud = sor_filter(cloud);
         this->publishPointCloud(sor_pub_, *sor_cloud);
-        //RCLCPP_INFO(this->get_logger(), "Statistical Outlier Removal Filtered Cloud published.");
 
+        // Publish pre-processed cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = sor_filter(crop_box_filter(voxel_filter(cloud)));
         this->publishPointCloud(pre_process_pub_, *pre_processed_cloud);
-        //RCLCPP_INFO(this->get_logger(), "Pre Processed Cloud published.");
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_filter(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud){
