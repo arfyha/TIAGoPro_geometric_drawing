@@ -47,7 +47,7 @@ public:
 
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/head_front_camera/depth/color/points"));
+        this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/voxel_filtered_cloud"));
         this->get_parameter_or("world_frame", world_frame_param, rclcpp::Parameter("", "base_footprint"));
         this->get_parameter_or("cluster_tolerance", cluster_tolerance_param, rclcpp::Parameter("", 0.01));
         this->get_parameter_or("min_cluster_size", min_cluster_size_param, rclcpp::Parameter("", 1));
@@ -127,15 +127,15 @@ private:
             cloud_cluster->width = cloud_cluster->points.size ();
             cloud_cluster->height = 1;
             cloud_cluster->is_dense = true;
-            RCLCPP_INFO(this->get_logger(), "Cluster has '%lu' points", cloud_cluster->points.size());
+            //RCLCPP_INFO(this->get_logger(), "Cluster has '%lu' points", cloud_cluster->points.size());
             clusters.push_back(cloud_cluster);
             sensor_msgs::msg::PointCloud2::SharedPtr tempROSMsg(new sensor_msgs::msg::PointCloud2);
             pcl::toROSMsg(*cloud_cluster, *tempROSMsg);
             pc2_clusters.push_back(tempROSMsg);
 
         }
-        RCLCPP_INFO(this->get_logger(), "Largest cluster has '%lu' points", clusters.at(0)->points.size());
-        this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(0));
+        //RCLCPP_INFO(this->get_logger(), "Largest cluster has '%lu' points", clusters.at(0)->points.size());
+        //this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(0));
     }
 
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,
