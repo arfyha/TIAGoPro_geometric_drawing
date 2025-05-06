@@ -43,7 +43,7 @@ public:
          */
         rclcpp::Parameter cloud_topic_param, world_frame_param, voxel_leaf_size_param, 
             x_filter_min_param, x_filter_max_param, y_filter_min_param, y_filter_max_param,
-            z_filter_min_param, z_filter_max_param;
+            z_filter_min_param, z_filter_max_param, nr_k_param, stddev_mult_param;
 
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
@@ -56,6 +56,8 @@ public:
         this->get_parameter_or("y_filter_max", y_filter_max_param, rclcpp::Parameter("", 10.0));
         this->get_parameter_or("z_filter_min", z_filter_min_param, rclcpp::Parameter("", -10.0));
         this->get_parameter_or("z_filter_max", z_filter_max_param, rclcpp::Parameter("", 10.0));
+        this->get_parameter_or("nr_k", nr_k_param, rclcpp::Parameter("", 50));
+        this->get_parameter_or("stddev_mult", stddev_mult_param, rclcpp::Parameter("", 1.0));
 
         cloud_topic = cloud_topic_param.as_string();
         world_frame = world_frame_param.as_string();
@@ -66,6 +68,8 @@ public:
         y_filter_max = y_filter_max_param.as_double();
         z_filter_min = z_filter_min_param.as_double();
         z_filter_max = z_filter_max_param.as_double();
+        nr_k = nr_k_param.as_int();
+        stddev_mult = stddev_mult_param.as_double();
 
         /*
          * SET UP SUBSCRIBER
@@ -114,6 +118,8 @@ private:
     float x_filter_min, x_filter_max;
     float y_filter_min, y_filter_max;
     float z_filter_min, z_filter_max;
+    int nr_k;
+    double stddev_mult;
 
     /*
      * TF
@@ -196,8 +202,8 @@ private:
         // Remove noise
         pcl::StatisticalOutlierRemoval<pcl::PointXYZ> sor;
         sor.setInputCloud(point_cloud);
-        sor.setMeanK(50); // Neighbor points to analyze
-        sor.setStddevMulThresh(1.0); // Remove outliers
+        sor.setMeanK(nr_k); // Neighbor points to analyze
+        sor.setStddevMulThresh(stddev_mult); // Remove outliers
         sor.filter(*filtered);
 
         return filtered;
