@@ -43,21 +43,26 @@ public:
         /*
          * SET UP PARAMETERS
          */
-        rclcpp::Parameter cloud_topic_param, world_frame_param, cluster_tolerance_param, min_cluster_size_param, max_cluster_size_param;
+        rclcpp::Parameter cloud_topic_param, world_frame_param, 
+            cluster_tolerance_param, min_cluster_size_param, max_cluster_size_param,
+            index_param;
 
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
         this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/voxel_filtered_cloud"));
         this->get_parameter_or("world_frame", world_frame_param, rclcpp::Parameter("", "base_footprint"));
-        this->get_parameter_or("cluster_tolerance", cluster_tolerance_param, rclcpp::Parameter("", 0.01));
-        this->get_parameter_or("min_cluster_size", min_cluster_size_param, rclcpp::Parameter("", 1));
-        this->get_parameter_or("max_cluster_size", max_cluster_size_param, rclcpp::Parameter("", 10000000));
+        this->get_parameter_or("cluster_tolerance", cluster_tolerance_param, rclcpp::Parameter("", 0.05));
+        this->get_parameter_or("min_cluster_size", min_cluster_size_param, rclcpp::Parameter("", 500));
+        this->get_parameter_or("max_cluster_size", max_cluster_size_param, rclcpp::Parameter("", 1000000));
+        this->get_parameter_or("index", index_param, rclcpp::Parameter("", 0));
 
         cloud_topic = cloud_topic_param.as_string();
         world_frame = world_frame_param.as_string();
         cluster_tolerance = cluster_tolerance_param.as_double();
         min_cluster_size = min_cluster_size_param.as_int();
         max_cluster_size = max_cluster_size_param.as_int();
+        index = size_t(index_param.as_int());
+        RCLCPP_INFO(this->get_logger(), "index: %lu", index);
 
         /*
          * SET UP SUBSCRIBER
@@ -93,6 +98,7 @@ private:
     double cluster_tolerance;
     pcl::uindex_t min_cluster_size;
     pcl::uindex_t max_cluster_size;
+    std::size_t index;
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
@@ -135,7 +141,8 @@ private:
 
         }
         //RCLCPP_INFO(this->get_logger(), "Largest cluster has '%lu' points", clusters.at(0)->points.size());
-        //this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(0));
+        RCLCPP_INFO(this->get_logger(), "Number clusters '%lu'", clusters.size());
+        this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(index));
     }
 
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,

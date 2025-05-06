@@ -29,9 +29,10 @@ def generate_launch_description():
             parameters=[{
                 'cloud_topic': 'pre_process_filtered_cloud',
                 'world_frame': 'base_footprint',
-                'cluster_tolerance': 0.01,
-                'min_cluster_size': 100,
+                'cluster_tolerance': 0.05,
+                'min_cluster_size': 500,
                 'max_cluster_size': 1000000,
+                'index': 0,
             }],
             output='screen',
         )
