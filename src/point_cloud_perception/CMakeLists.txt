@@ -32,17 +32,35 @@ target_include_directories(pre_process PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 
-  ament_target_dependencies(pre_process rclcpp tf2_ros tf2 tf2_eigen sensor_msgs visualization_msgs geometry_msgs pcl_ros)
+ament_target_dependencies(pre_process rclcpp tf2_ros tf2 tf2_eigen sensor_msgs visualization_msgs geometry_msgs pcl_ros)
 
 target_link_libraries(
   pre_process
   ${PCL_LIBRARIES}
 )
 
+add_executable(euclidean_cluster src/euclidean_cluster.cpp)
+target_include_directories(euclidean_cluster PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+ament_target_dependencies(euclidean_cluster rclcpp tf2_ros tf2 tf2_eigen sensor_msgs visualization_msgs geometry_msgs pcl_ros)
+
+target_link_libraries(
+  euclidean_cluster
+  ${PCL_LIBRARIES}
+)
+
 
 install(TARGETS
   pre_process
+  euclidean_cluster
   DESTINATION lib/${PROJECT_NAME})
+
+install(DIRECTORY
+  launch
+  DESTINATION share/${PROJECT_NAME}/
+)
 
 if(BUILD_TESTING)
   find_package(ament_lint_auto REQUIRED)
