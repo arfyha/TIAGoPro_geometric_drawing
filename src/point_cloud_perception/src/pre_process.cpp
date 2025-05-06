@@ -21,10 +21,10 @@
 #include <pcl/filters/statistical_outlier_removal.h>
 
 
-class VoxelFilterNode : public rclcpp::Node
+class PreProcessNode : public rclcpp::Node
 {
 public:
-    VoxelFilterNode() : Node("voxel_filter_node", rclcpp::NodeOptions()
+    PreProcessNode() : Node("pre_process_node", rclcpp::NodeOptions()
     .automatically_declare_parameters_from_overrides(true))
     {
         /*
@@ -38,7 +38,7 @@ public:
         pre_process_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/pre_process_filtered_cloud", 10);
 
         /*
-         * SET UP PARAMETERS (COULD BE INPUT FROM LAUNCH FILE/TERMINAL)
+         * SET UP PARAMETERS
          */
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
@@ -46,10 +46,10 @@ public:
         this->declare_parameter<std::string>("world_frame", "base_footprint");
         this->declare_parameter<double>("voxel_leaf_size", 0.01);
         this->declare_parameter<double>("x_filter_min", -0.7);
-        this->declare_parameter<double>("x_filter_max", 2.0);
+        this->declare_parameter<double>("x_filter_max", 5.0);
         this->declare_parameter<double>("y_filter_min", -1.2);
         this->declare_parameter<double>("y_filter_max", 1.2);
-        this->declare_parameter<double>("z_filter_min", 0.0);
+        this->declare_parameter<double>("z_filter_min", -0.1);
         this->declare_parameter<double>("z_filter_max", 1.8);
 
         cloud_topic = this->get_parameter("cloud_topic").as_string();
@@ -74,7 +74,7 @@ public:
         point_cloud_sub_ = this->create_subscription<sensor_msgs::msg::PointCloud2>(
                     cloud_topic,
                     qos_settings,
-                    std::bind(&VoxelFilterNode::pointCloudCallback, this, std::placeholders::_1)
+                    std::bind(&PreProcessNode::pointCloudCallback, this, std::placeholders::_1)
                 );
 
         /*
@@ -85,7 +85,7 @@ public:
         tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
         br = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
-        RCLCPP_INFO(this->get_logger(), "Voxel Filter Node started.");
+        RCLCPP_INFO(this->get_logger(), "Pre Process Node started.");
     }
 
 private:
@@ -212,7 +212,7 @@ private:
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);
-    rclcpp::spin(std::make_shared<VoxelFilterNode>());
+    rclcpp::spin(std::make_shared<PreProcessNode>());
     rclcpp::shutdown();
     return 0;
 }
