@@ -47,29 +47,17 @@ public:
 
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        this->get_parameter_or("cloud_topic", cloud_topic_param, rclcpp::Parameter("", "/head_front_camera/depth/color/points"));
-        this->get_parameter_or("world_frame", world_frame_param, rclcpp::Parameter("", "base_footprint"));
-        this->get_parameter_or("voxel_leaf_size", voxel_leaf_size_param, rclcpp::Parameter("", 0.05));
-        this->get_parameter_or("x_filter_min", x_filter_min_param, rclcpp::Parameter("", -10.0));
-        this->get_parameter_or("x_filter_max", x_filter_max_param, rclcpp::Parameter("", 10.0));
-        this->get_parameter_or("y_filter_min", y_filter_min_param, rclcpp::Parameter("", -10.0));
-        this->get_parameter_or("y_filter_max", y_filter_max_param, rclcpp::Parameter("", 10.0));
-        this->get_parameter_or("z_filter_min", z_filter_min_param, rclcpp::Parameter("", -10.0));
-        this->get_parameter_or("z_filter_max", z_filter_max_param, rclcpp::Parameter("", 10.0));
-        this->get_parameter_or("nr_k", nr_k_param, rclcpp::Parameter("", 50));
-        this->get_parameter_or("stddev_mult", stddev_mult_param, rclcpp::Parameter("", 1.0));
-
-        cloud_topic = cloud_topic_param.as_string();
-        world_frame = world_frame_param.as_string();
-        voxel_leaf_size = float(voxel_leaf_size_param.as_double());
-        x_filter_min = x_filter_min_param.as_double();
-        x_filter_max = x_filter_max_param.as_double();
-        y_filter_min = y_filter_min_param.as_double();
-        y_filter_max = y_filter_max_param.as_double();
-        z_filter_min = z_filter_min_param.as_double();
-        z_filter_max = z_filter_max_param.as_double();
-        nr_k = nr_k_param.as_int();
-        stddev_mult = stddev_mult_param.as_double();
+        cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/voxel_filtered_cloud");
+        world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
+        voxel_leaf_size = float(this->get_or_create_parameter<double>("voxel_leaf_size", 0.05));
+        x_filter_min = this->get_or_create_parameter<double>("x_filter_min", -10.0);
+        x_filter_max = this->get_or_create_parameter<double>("x_filter_max", 10.0);
+        y_filter_min = this->get_or_create_parameter<double>("y_filter_min", -10.0);
+        y_filter_max = this->get_or_create_parameter<double>("y_filter_max", 10.0);
+        z_filter_min = this->get_or_create_parameter<double>("z_filter_min", -10.0);
+        z_filter_max = this->get_or_create_parameter<double>("z_filter_max", 10.0);
+        nr_k = this->get_or_create_parameter<int>("nr_k", 50);
+        stddev_mult = this->get_or_create_parameter<double>("stddev_mult", 1.0);
 
         /*
          * SET UP SUBSCRIBER
@@ -130,6 +118,18 @@ private:
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
+
+        cloud_topic = this->get_parameter("cloud_topic").get_parameter_value().get<std::string>();
+        world_frame = this->get_parameter("world_frame").get_parameter_value().get<std::string>();
+        voxel_leaf_size = float(this->get_parameter("voxel_leaf_size").get_parameter_value().get<double>());
+        x_filter_min = this->get_parameter("x_filter_min").get_parameter_value().get<double>();
+        x_filter_max = this->get_parameter("x_filter_max").get_parameter_value().get<double>();
+        y_filter_min = this->get_parameter("y_filter_min").get_parameter_value().get<double>();
+        y_filter_max = this->get_parameter("y_filter_max").get_parameter_value().get<double>();
+        z_filter_min = this->get_parameter("z_filter_min").get_parameter_value().get<double>();
+        z_filter_max = this->get_parameter("z_filter_max").get_parameter_value().get<double>();
+        nr_k = this->get_parameter("nr_k").get_parameter_value().get<int>();
+        stddev_mult = this->get_parameter("stddev_mult").get_parameter_value().get<double>();
 
         // Transform for pointcloud in world frame
         geometry_msgs::msg::TransformStamped transform;
@@ -217,6 +217,19 @@ private:
     pc2_cloud->header.frame_id = world_frame;
     pc2_cloud->header.stamp = this->get_clock()->now();
     publisher->publish(*pc2_cloud);
+    }
+
+    template<typename T>
+    T get_or_create_parameter(const std::string & name, const T & default_value)
+    {
+        T value;
+        if (!this->has_parameter(name)) {
+            this->declare_parameter<T>(name, default_value);
+            value = default_value;
+        } else {
+            this->get_parameter(name, value);
+        }
+        return value;
     }
 };
 
