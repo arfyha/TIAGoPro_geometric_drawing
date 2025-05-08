@@ -159,7 +159,7 @@ private:
             this->declare_parameter<T>(name, default_value);
             value = default_value;
         } else {
-            this->get_parameter(name, value);
+            value = this->get_parameter(name).get_parameter_value().get<T>();
         }
         return value;
     }

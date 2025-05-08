@@ -14,9 +14,9 @@ find_package(vision_msgs)
 find_package(geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_eigen REQUIRED)
 find_package(pcl_ros REQUIRED)
 find_package(pcl_conversions REQUIRED)
-find_package(tf2_eigen REQUIRED)
 find_package(PCL REQUIRED)
 
 include_directories(
