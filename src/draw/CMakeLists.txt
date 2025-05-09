@@ -44,7 +44,7 @@ ament_target_dependencies(
   tf2
 )
 
-add_executable(fixed_frame_tf2_broadcaster src/tf_pub.cpp)
+add_executable(fixed_frame_tf2_broadcaster src/fixed_frame_tf2_broadcaster.cpp)
 ament_target_dependencies(
     fixed_frame_tf2_broadcaster
     geometry_msgs
