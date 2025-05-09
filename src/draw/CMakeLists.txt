@@ -11,7 +11,9 @@ find_package(moveit_ros_planning_interface REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(moveit_visual_tools REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
+find_package(tf2_eigen REQUIRED)
 
 add_executable(draw_circle_air src/draw_circle_air.cpp)
 add_executable(draw_circle_whiteboard src/draw_circle_whiteboard.cpp)
@@ -25,24 +27,38 @@ target_compile_features(draw_circle_air PUBLIC c_std_99 cxx_std_17)
 target_compile_features(draw_circle_whiteboard PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
   draw_circle_air
-  "moveit_ros_planning_interface"
-  "rclcpp"
-  "moveit_visual_tools"
-  "tf2_geometry_msgs"
-  "tf2"
+  moveit_ros_planning_interface
+  rclcpp
+  moveit_visual_tools
+  tf2_geometry_msgs
+  tf2
+  tf2_ros 
+  tf2_eigen
 )
 ament_target_dependencies(
   draw_circle_whiteboard
-  "moveit_ros_planning_interface"
-  "rclcpp"
-  "moveit_visual_tools"
-  "tf2_geometry_msgs"
-  "tf2"
+  moveit_ros_planning_interface
+  rclcpp
+  moveit_visual_tools
+  tf2_geometry_msgs
+  tf2
+)
+
+add_executable(fixed_frame_tf2_broadcaster src/tf_pub.cpp)
+ament_target_dependencies(
+    fixed_frame_tf2_broadcaster
+    geometry_msgs
+    rclcpp
+    tf2_geometry_msgs
+    tf2
+    tf2_ros 
+    tf2_eigen
 )
 
 install(TARGETS 
   draw_circle_air
   draw_circle_whiteboard
+  fixed_frame_tf2_broadcaster
   DESTINATION lib/${PROJECT_NAME})
 
   # Install launch files.

@@ -96,7 +96,6 @@ private:
         min_cluster_size = pcl::uindex_t(this->get_parameter("min_cluster_size").get_parameter_value().get<int>());
         max_cluster_size = pcl::uindex_t(this->get_parameter("max_cluster_size").get_parameter_value().get<int>());
         index = size_t(this->get_parameter("index").get_parameter_value().get<int>());
-        RCLCPP_INFO(this->get_logger(), "index: %lu", index);
 
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
@@ -137,7 +136,7 @@ private:
 
         }
         //RCLCPP_INFO(this->get_logger(), "Largest cluster has '%lu' points", clusters.at(0)->points.size());
-        //RCLCPP_INFO(this->get_logger(), "Number clusters '%lu'", clusters.size());
+        RCLCPP_INFO(this->get_logger(), "Number clusters '%lu'", clusters.size());
         this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(index));
     }
 

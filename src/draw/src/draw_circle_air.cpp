@@ -7,7 +7,12 @@
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
-#include <tf2/LinearMath/Quaternion.h>
+#include <tf2/convert.hpp>
+#include <tf2/LinearMath/Quaternion.hpp>
+#include <tf2/transform_datatypes.hpp>
+#include <tf2_eigen/tf2_eigen.hpp>
+#include <tf2_ros/transform_broadcaster.h>
+#include <tf2_ros/transform_listener.h>
 
 static const std::string NODE_NAME = "draw_circle";
 static const std::string PLANNING_GROUP = "arm_right";
@@ -19,9 +24,14 @@ static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
 class DrawCircleNode : public rclcpp::Node {
 public:
   DrawCircleNode()
-    : Node(NODE_NAME, rclcpp::NodeOptions().automatically_declare_parameters_from_overrides(true)) {
+    : Node(NODE_NAME, rclcpp::NodeOptions()
+      .automatically_declare_parameters_from_overrides(true)) 
+    {
     // Set use_sim_time = true
     //this->declare_parameter("use_sim_time", true);
+    tf_buffer_   = std::make_unique<tf2_ros::Buffer>(this->get_clock());
+    tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+    br = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
   }
 
   void initialize() {
@@ -37,6 +47,7 @@ public:
     initializeOrientation();
     //addOrientationConstraint();
     logBasicInfo();
+
     drawCircle();
   }
 
@@ -50,7 +61,11 @@ private:
   const double center_x_ = 0.6;
   const double center_y_ = -0.17;
   const double center_z_ = 0.75;
-  const int num_points_ = 360;
+  const int num_points_ = 4;
+
+  std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::unique_ptr<tf2_ros::TransformBroadcaster> br;
 
   void initializeOrientation() {
     tf2::Quaternion q;
@@ -109,7 +124,20 @@ private:
   void drawCircle() {
     std::vector<geometry_msgs::msg::Pose> waypoints;
     for (int i = 0; i < num_points_; ++i) {
-      auto pose = calculatePose(i);
+      geometry_msgs::msg::TransformStamped transformStamped;
+      try {
+        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "circle_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(5.0));
+      } catch (tf2::TransformException &ex) {
+        RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
+        return;
+      }
+      geometry_msgs::msg::Pose pose;
+      pose.position.x = transformStamped.transform.translation.x;
+      pose.position.y = transformStamped.transform.translation.y;
+      pose.position.z = transformStamped.transform.translation.z;
+      pose.orientation = transformStamped.transform.rotation;
+
+      auto pose_ = calculatePose(i);
       waypoints.push_back(pose);
     }
 
@@ -117,6 +145,7 @@ private:
 
     move_group_interface_->setPlanningTime(30.0);
     move_group_interface_->setNumPlanningAttempts(100);
+    move_group_interface_->setMaxVelocityScalingFactor(0.1);
 
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
@@ -161,7 +190,7 @@ int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
 
   auto node = std::make_shared<DrawCircleNode>();
-  node->initialize();  // <-- shared_from_this() is safe here
+  node->initialize();
   rclcpp::spin(node);
 
   rclcpp::shutdown();
