@@ -137,7 +137,7 @@ private:
       pose.position.z = transformStamped.transform.translation.z;
       pose.orientation = transformStamped.transform.rotation;
 
-      auto pose_ = calculatePose(i);
+      //auto pose_ = calculatePose(i);
       waypoints.push_back(pose);
     }
 

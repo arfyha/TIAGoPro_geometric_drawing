@@ -31,6 +31,11 @@ private:
   rclcpp::TimerBase::SharedPtr timer_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   tf2Scalar roll;
+  const double radius_ = 0.2;
+  const double center_x_ = 0.78;
+  const double center_y_ = -0.17;
+  const double center_z_ = 0.75;
+  const int num_points_ = 4;
 
   void broadcast_timer_callback() {
 
@@ -40,9 +45,9 @@ private:
     t.header.stamp = this->get_clock()->now();
     t.header.frame_id = "base_footprint";
     t.child_frame_id = "circle_center";
-    t.transform.translation.x = 0.6;
-    t.transform.translation.y = -0.17;
-    t.transform.translation.z = 0.75;
+    t.transform.translation.x = center_x_;
+    t.transform.translation.y = center_y_;
+    t.transform.translation.z = center_z_;
     tf2::Quaternion q;
     q.setRPY(roll, 0, M_PI / 2);
     q.normalize();
@@ -50,15 +55,15 @@ private:
     t.transform.rotation = q_msg_;
     tf_broadcaster_->sendTransform(t);
 
-    for (int i = 0; i < 4; ++i) {
-      double angle = 2 * M_PI * i / 4;
+    for (int i = 0; i < num_points_; ++i) {
+      double angle = 2 * M_PI * i / num_points_;
       geometry_msgs::msg::TransformStamped ti;
       ti.header.stamp = this->get_clock()->now();
       ti.header.frame_id = "circle_center";
       ti.child_frame_id = "circle_point_" + std::to_string(i);
-      ti.transform.translation.x = 0.2 * std::cos(angle);
-      ti.transform.translation.y = 0.2 * std::sin(angle);
-      ti.transform.translation.z = 0.0;
+      ti.transform.translation.x = radius_ * std::cos(angle);
+      ti.transform.translation.y = radius_ * std::sin(angle);
+      ti.transform.translation.z = -0.18;
       ti.transform.rotation.w = 1.0;
       ti.transform.rotation.x = 0.0;
       ti.transform.rotation.y = 0.0;
