@@ -57,14 +57,20 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
 
     launch_description.add_action(moveit_rviz)
 
+    whiteboard_model_path = os.path.join(
+        get_package_share_directory('draw'),
+        'models',
+        'whiteboard.sdf'
+    )
+
     whiteboard = Node(
             package='gazebo_ros',
             executable='spawn_entity.py',
             name='spawn_whiteboard',
             arguments=[
                 '-entity', 'whiteboard',
-                '-file', '/home/user/exchange/TIAGoPro_WS/src/draw/models/whiteboard.sdf',
-                '-x', '4.75',
+                '-file', whiteboard_model_path,
+                '-x', '3.75',
                 '-y', '0',
                 '-z', '0',
                 '-Y', '1.5708'
