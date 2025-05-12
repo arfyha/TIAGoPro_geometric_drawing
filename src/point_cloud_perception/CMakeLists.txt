@@ -51,10 +51,23 @@ target_link_libraries(
   ${PCL_LIBRARIES}
 )
 
+add_executable(plane_segmentation src/plane_segmentation.cpp)
+target_include_directories(plane_segmentation PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+
+ament_target_dependencies(plane_segmentation rclcpp tf2_ros tf2 tf2_eigen sensor_msgs visualization_msgs geometry_msgs pcl_ros)
+
+target_link_libraries(
+  plane_segmentation
+  ${PCL_LIBRARIES}
+)
+
 
 install(TARGETS
   pre_process
   euclidean_cluster
+  plane_segmentation
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY
