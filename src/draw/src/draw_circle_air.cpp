@@ -18,7 +18,7 @@ static const std::string NODE_NAME = "draw_circle";
 static const std::string PLANNING_GROUP = "arm_right";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
-//head_2_joint = -0.23
+//head_2_joint = -0.537509
 //torso_joint = 0.25
 
 class DrawCircleNode : public rclcpp::Node {
@@ -61,7 +61,7 @@ private:
   const double center_x_ = 0.6;
   const double center_y_ = -0.17;
   const double center_z_ = 0.75;
-  const int num_points_ = 4;
+  const int num_points_ = 360;
 
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;

@@ -32,10 +32,10 @@ private:
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   tf2Scalar roll;
   const double radius_ = 0.2;
-  const double center_x_ = 0.78;
-  const double center_y_ = -0.17;
-  const double center_z_ = 0.75;
-  const int num_points_ = 4;
+  const double center_x_ = 0.75;
+  const double center_y_ = -0.0;
+  const double center_z_ = 1.0;
+  const int num_points_ = 360;
 
   void broadcast_timer_callback() {
 

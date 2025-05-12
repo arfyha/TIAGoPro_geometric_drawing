@@ -55,15 +55,28 @@ ament_target_dependencies(
     tf2_eigen
 )
 
+add_executable(frame_broadcaster src/frame_broadcaster.cpp)
+ament_target_dependencies(
+    frame_broadcaster
+    geometry_msgs
+    rclcpp
+    tf2_geometry_msgs
+    tf2
+    tf2_ros 
+    tf2_eigen
+)
+
 install(TARGETS 
   draw_circle_air
   draw_circle_whiteboard
   fixed_frame_tf2_broadcaster
+  frame_broadcaster
   DESTINATION lib/${PROJECT_NAME})
 
   # Install launch files.
 install(DIRECTORY
   launch
+  models
   DESTINATION share/${PROJECT_NAME}/
 )
 
