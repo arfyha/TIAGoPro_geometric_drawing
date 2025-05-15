@@ -38,8 +38,8 @@ public:
         */
         RCLCPP_INFO(this->get_logger(), "Setting up publishers");
 
-        plane_seg_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/plane_seg_cloud", 10);
-        plane_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/plane_cloud", 10);
+        plane_seg_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/filtered_out_cloud", 10);
+        plane_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/whiteboard_cloud", 10);
 
         /*
          * SET UP PARAMETERS
@@ -88,9 +88,8 @@ private:
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(*point_cloud_msg, *cloud);
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_f (new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered (new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_plane (new pcl::PointCloud<pcl::PointXYZ> ());
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_out (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_whiteboard (new pcl::PointCloud<pcl::PointXYZ> ());
 
         pcl::SACSegmentation<pcl::PointXYZ> seg;
         pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
@@ -115,15 +114,15 @@ private:
         extract.setNegative (false);
 
         // Get the points associated with the planar surface
-        extract.filter (*cloud_plane);
-        RCLCPP_INFO(this->get_logger(), "PointCloud2 representing the planar component: '%lu' data points.", cloud_plane->points.size());
+        extract.filter (*cloud_whiteboard);
+        //RCLCPP_INFO(this->get_logger(), "PointCloud2 representing the planar component: '%lu' data points.", cloud_plane->points.size());
         
         // Remove the planar inliers, extract the rest
         extract.setNegative (true);
-        extract.filter (*cloud_f);
+        extract.filter (*cloud_filtered_out);
 
-        this->publishPointCloud(plane_pub_, *cloud_plane);
-        this->publishPointCloud(plane_seg_pub_, *cloud_f);
+        this->publishPointCloud(plane_pub_, *cloud_whiteboard);
+        this->publishPointCloud(plane_seg_pub_, *cloud_filtered_out);
         
     }
 
