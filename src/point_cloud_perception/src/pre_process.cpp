@@ -47,16 +47,16 @@ public:
 
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/voxel_filtered_cloud");
+        cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/head_front_camera/depth/color/points");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
-        voxel_leaf_size = float(this->get_or_create_parameter<double>("voxel_leaf_size", 0.05));
-        x_filter_min = this->get_or_create_parameter<double>("x_filter_min", -10.0);
-        x_filter_max = this->get_or_create_parameter<double>("x_filter_max", 10.0);
-        y_filter_min = this->get_or_create_parameter<double>("y_filter_min", -10.0);
-        y_filter_max = this->get_or_create_parameter<double>("y_filter_max", 10.0);
-        z_filter_min = this->get_or_create_parameter<double>("z_filter_min", -10.0);
-        z_filter_max = this->get_or_create_parameter<double>("z_filter_max", 10.0);
-        nr_k = this->get_or_create_parameter<int>("nr_k", 50);
+        voxel_leaf_size = float(this->get_or_create_parameter<double>("voxel_leaf_size", 0.01));
+        x_filter_min = this->get_or_create_parameter<double>("x_filter_min", -0.7);
+        x_filter_max = this->get_or_create_parameter<double>("x_filter_max", 2.0);
+        y_filter_min = this->get_or_create_parameter<double>("y_filter_min", -1.2);
+        y_filter_max = this->get_or_create_parameter<double>("y_filter_max", -1.2);
+        z_filter_min = this->get_or_create_parameter<double>("z_filter_min", 0.1);
+        z_filter_max = this->get_or_create_parameter<double>("z_filter_max", 1.8);
+        nr_k = this->get_or_create_parameter<int>("nr_k", 20);
         stddev_mult = this->get_or_create_parameter<double>("stddev_mult", 1.0);
 
         /*
@@ -158,8 +158,8 @@ private:
         this->publishPointCloud(crop_pub_, *crop_cloud);
 
         // Publish SOR filtered cloud
-        pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud = sor_filter(cloud);
-        this->publishPointCloud(sor_pub_, *sor_cloud);
+        //pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud = sor_filter(cloud);
+        //this->publishPointCloud(sor_pub_, *sor_cloud);
 
         // Publish pre-processed cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = sor_filter(crop_box_filter(voxel_filter(cloud)));
