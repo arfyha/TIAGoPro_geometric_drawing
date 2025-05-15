@@ -70,7 +70,7 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
             arguments=[
                 '-entity', 'whiteboard',
                 '-file', whiteboard_model_path,
-                '-x', '3.75',
+                '-x', '0.75',
                 '-y', '0',
                 '-z', '0',
                 '-Y', '1.5708'
