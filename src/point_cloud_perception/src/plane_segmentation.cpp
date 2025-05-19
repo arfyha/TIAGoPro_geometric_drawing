@@ -24,6 +24,7 @@
 #include <pcl/segmentation/sac_segmentation.h>
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
+#include <pcl/features/normal_3d.h>
 
 
 class PlaneSegmentationNode : public rclcpp::Node
@@ -64,10 +65,13 @@ public:
                     std::bind(&PlaneSegmentationNode::pointCloudCallback, this, std::placeholders::_1)
                 );
 
+        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+
         RCLCPP_INFO(this->get_logger(), "Plane Segmentation Node started.");
     }
 
 private:
+    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     /*
      * Subscriber and Publisher declaration
@@ -121,6 +125,8 @@ private:
         extract.setNegative (true);
         extract.filter (*cloud_filtered_out);
 
+        computeCentroidAndOBB(cloud_whiteboard);
+
         this->publishPointCloud(plane_pub_, *cloud_whiteboard);
         this->publishPointCloud(plane_seg_pub_, *cloud_filtered_out);
         
@@ -147,6 +153,88 @@ private:
             value = this->get_parameter(name).get_parameter_value().get<T>();
         }
         return value;
+    }
+
+    void computeCentroidAndOBB(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+
+        Eigen::Vector4f centroid;
+        pcl::compute3DCentroid(*cloud, centroid);
+
+        Eigen::Vector4f min_pt, max_pt;
+        Eigen::Vector3f center;
+        pcl::getMinMax3D(*cloud, min_pt, max_pt);
+        center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
+
+        geometry_msgs::msg::TransformStamped t;
+        t.header.stamp = this->get_clock()->now();
+        t.header.frame_id = "base_footprint";
+
+        t.child_frame_id = "centroid";
+        t.transform.translation.x = centroid[0];
+        t.transform.translation.y = centroid[1];
+        t.transform.translation.z = centroid[2];
+        tf_broadcaster_->sendTransform(t);
+
+        t.child_frame_id = "min_pt";
+        t.transform.translation.x = min_pt[0];
+        t.transform.translation.y = min_pt[1];
+        t.transform.translation.z = min_pt[2];
+        tf_broadcaster_->sendTransform(t);
+        t.child_frame_id = "max_pt";
+        t.transform.translation.x = max_pt[0];
+        t.transform.translation.y = max_pt[1];
+        t.transform.translation.z = max_pt[2];
+        tf_broadcaster_->sendTransform(t);
+        t.child_frame_id = "center";
+        t.transform.translation.x = center[0];
+        t.transform.translation.y = center[1];
+        t.transform.translation.z = center[2];
+        tf_broadcaster_->sendTransform(t);
+
+        RCLCPP_INFO(this->get_logger(), "Centroid: (%f, %f, %f)", centroid[0], centroid[1], centroid[2]);
+        RCLCPP_INFO(this->get_logger(), "Min: (%f, %f, %f)", min_pt[0], min_pt[1], min_pt[2]);
+        RCLCPP_INFO(this->get_logger(), "Max: (%f, %f, %f)", max_pt[0], max_pt[1], max_pt[2]);
+        RCLCPP_INFO(this->get_logger(), "Center: (%f, %f, %f)", center[0], center[1], center[2]);
+
+        // Create NormalEstimation object
+        pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+        pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
+        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
+
+        ne.setInputCloud(cloud);
+        ne.setSearchMethod(tree);
+        ne.setRadiusSearch(0.03); // Adjust based on point density (3cm neighborhood)
+        ne.compute(*normals);
+
+        Eigen::Vector3f avg_normal = Eigen::Vector3f::Zero();
+        for (const auto& normal : *normals) {
+            avg_normal += Eigen::Vector3f(normal.normal_x, normal.normal_y, normal.normal_z);
+        }
+        avg_normal.normalize(); // Unit vector
+
+        // Assume the whiteboard's normal is its "up" (Z) direction
+        Eigen::Vector3f whiteboard_normal = avg_normal;
+        Eigen::Vector3f world_z(0, 0, 1);
+
+        // Handle cases where the whiteboard is vertical/horizontal
+        Eigen::Vector3f rotation_axis = world_z.cross(whiteboard_normal);
+        float rotation_angle = std::acos(world_z.dot(whiteboard_normal));
+        Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis));
+
+        // If the whiteboard is near-horizontal, adjust to avoid flips
+        if (whiteboard_normal.z() < 0) {
+            quat = Eigen::Quaternionf(Eigen::AngleAxisf(M_PI, Eigen::Vector3f(1, 0, 0))) * quat;
+        }
+
+        t.child_frame_id = "kreis_zentrum";
+        t.transform.translation.x = centroid[0];
+        t.transform.translation.y = centroid[1];
+        t.transform.translation.z = centroid[2];
+        t.transform.rotation.w = quat.w();
+        t.transform.rotation.x = quat.x();
+        t.transform.rotation.y = quat.y();
+        t.transform.rotation.z = quat.z();
+        tf_broadcaster_->sendTransform(t);
     }
 
 };
