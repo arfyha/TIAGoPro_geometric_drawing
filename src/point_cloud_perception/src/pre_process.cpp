@@ -56,8 +56,8 @@ public:
         y_filter_max = this->get_or_create_parameter<double>("y_filter_max", -1.2);
         z_filter_min = this->get_or_create_parameter<double>("z_filter_min", 0.1);
         z_filter_max = this->get_or_create_parameter<double>("z_filter_max", 1.8);
-        nr_k = this->get_or_create_parameter<int>("nr_k", 20);
-        stddev_mult = this->get_or_create_parameter<double>("stddev_mult", 1.0);
+        nr_k = this->get_or_create_parameter<int>("nr_k", 100);
+        stddev_mult = this->get_or_create_parameter<double>("stddev_mult", 0.5);
 
         /*
          * SET UP SUBSCRIBER

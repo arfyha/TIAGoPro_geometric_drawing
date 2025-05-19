@@ -18,7 +18,7 @@ static const std::string NODE_NAME = "draw_circle";
 static const std::string PLANNING_GROUP = "arm_right";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
-//head_2_joint = -0.537509
+//head_2_joint = -0.776201
 //torso_joint = 0.25
 
 class DrawCircleNode : public rclcpp::Node {
