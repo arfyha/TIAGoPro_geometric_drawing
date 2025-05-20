@@ -26,11 +26,16 @@
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 #include <pcl/features/normal_3d.h>
 
+#include <vision_msgs/msg/bounding_box3_d.hpp>
+#include <vision_msgs/msg/detection3_d.hpp>
+#include <vision_msgs/msg/detection3_d_array.hpp>
+#include <visualization_msgs/msg/marker_array.hpp>
+
 
 class PlaneSegmentationNode : public rclcpp::Node
 {
 public:
-    PlaneSegmentationNode() : Node("plane_segmentation", rclcpp::NodeOptions()
+    PlaneSegmentationNode() : Node("plane_segmentation_node", rclcpp::NodeOptions()
     .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
     {
@@ -49,6 +54,7 @@ public:
 
         cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/pre_process_filtered_cloud");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
+        radius = this->get_or_create_parameter<double>("radius", 0.05);
 
         /*
          * SET UP SUBSCRIBER
@@ -85,9 +91,12 @@ private:
      */
     std::string cloud_topic;
     std::string world_frame;
+    double radius;
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
+        radius = this->get_parameter("radius").get_parameter_value().get<double>();
+
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(*point_cloud_msg, *cloud);
@@ -125,11 +134,10 @@ private:
         extract.setNegative (true);
         extract.filter (*cloud_filtered_out);
 
-        computeCentroidAndOBB(cloud_whiteboard);
+        computeWhiteboardFeatures(cloud_whiteboard);
 
         this->publishPointCloud(plane_pub_, *cloud_whiteboard);
         this->publishPointCloud(plane_seg_pub_, *cloud_filtered_out);
-        
     }
 
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,
@@ -155,46 +163,7 @@ private:
         return value;
     }
 
-    void computeCentroidAndOBB(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
-
-        Eigen::Vector4f centroid;
-        pcl::compute3DCentroid(*cloud, centroid);
-
-        Eigen::Vector4f min_pt, max_pt;
-        Eigen::Vector3f center;
-        pcl::getMinMax3D(*cloud, min_pt, max_pt);
-        center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
-
-        geometry_msgs::msg::TransformStamped t;
-        t.header.stamp = this->get_clock()->now();
-        t.header.frame_id = "base_footprint";
-
-        t.child_frame_id = "centroid";
-        t.transform.translation.x = centroid[0];
-        t.transform.translation.y = centroid[1];
-        t.transform.translation.z = centroid[2];
-        tf_broadcaster_->sendTransform(t);
-
-        t.child_frame_id = "min_pt";
-        t.transform.translation.x = min_pt[0];
-        t.transform.translation.y = min_pt[1];
-        t.transform.translation.z = min_pt[2];
-        tf_broadcaster_->sendTransform(t);
-        t.child_frame_id = "max_pt";
-        t.transform.translation.x = max_pt[0];
-        t.transform.translation.y = max_pt[1];
-        t.transform.translation.z = max_pt[2];
-        tf_broadcaster_->sendTransform(t);
-        t.child_frame_id = "center";
-        t.transform.translation.x = center[0];
-        t.transform.translation.y = center[1];
-        t.transform.translation.z = center[2];
-        tf_broadcaster_->sendTransform(t);
-
-        RCLCPP_INFO(this->get_logger(), "Centroid: (%f, %f, %f)", centroid[0], centroid[1], centroid[2]);
-        RCLCPP_INFO(this->get_logger(), "Min: (%f, %f, %f)", min_pt[0], min_pt[1], min_pt[2]);
-        RCLCPP_INFO(this->get_logger(), "Max: (%f, %f, %f)", max_pt[0], max_pt[1], max_pt[2]);
-        RCLCPP_INFO(this->get_logger(), "Center: (%f, %f, %f)", center[0], center[1], center[2]);
+    void computeWhiteboardFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
 
         // Create NormalEstimation object
         pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
@@ -203,30 +172,57 @@ private:
 
         ne.setInputCloud(cloud);
         ne.setSearchMethod(tree);
-        ne.setRadiusSearch(0.03); // Adjust based on point density (3cm neighborhood)
+        ne.setRadiusSearch(radius);
         ne.compute(*normals);
 
         Eigen::Vector3f avg_normal = Eigen::Vector3f::Zero();
-        for (const auto& normal : *normals) {
+        for (const auto &normal : *normals) {
             avg_normal += Eigen::Vector3f(normal.normal_x, normal.normal_y, normal.normal_z);
         }
-        avg_normal.normalize(); // Unit vector
+        avg_normal = avg_normal.normalized(); // Unit vector
+        if (avg_normal[0] > 0) {
+            avg_normal = -avg_normal;
+        }
 
         // Assume the whiteboard's normal is its "up" (Z) direction
         Eigen::Vector3f whiteboard_normal = avg_normal;
         Eigen::Vector3f world_z(0, 0, 1);
 
-        // Handle cases where the whiteboard is vertical/horizontal
         Eigen::Vector3f rotation_axis = world_z.cross(whiteboard_normal);
-        float rotation_angle = std::acos(world_z.dot(whiteboard_normal));
-        Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis));
+        float rotation_angle = std::acos(world_z.dot(whiteboard_normal)/
+                                          (world_z.norm() * whiteboard_normal.norm()));
+        Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis.normalized()));
 
-        // If the whiteboard is near-horizontal, adjust to avoid flips
-        if (whiteboard_normal.z() < 0) {
-            quat = Eigen::Quaternionf(Eigen::AngleAxisf(M_PI, Eigen::Vector3f(1, 0, 0))) * quat;
-        }
+        Eigen::Vector4f centroid;
+        pcl::compute3DCentroid(*cloud, centroid);
 
-        t.child_frame_id = "kreis_zentrum";
+        Eigen::Vector4f min_pt, max_pt;
+        Eigen::Vector3f center;
+        pcl::getMinMax3D(*cloud, min_pt, max_pt);
+        center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
+        geometry_msgs::msg::TransformStamped t;
+        t.header.stamp = this->get_clock()->now();
+        t.header.frame_id = "base_footprint";
+
+        t.child_frame_id = "min_pt";
+        t.transform.translation.x = min_pt[0];
+        t.transform.translation.y = min_pt[1];
+        t.transform.translation.z = min_pt[2];
+        tf_broadcaster_->sendTransform(t);
+
+        t.child_frame_id = "max_pt";
+        t.transform.translation.x = max_pt[0];
+        t.transform.translation.y = max_pt[1];
+        t.transform.translation.z = max_pt[2];
+        tf_broadcaster_->sendTransform(t);
+
+        t.child_frame_id = "bb_center";
+        t.transform.translation.x = center[0];
+        t.transform.translation.y = center[1];
+        t.transform.translation.z = center[2];
+        tf_broadcaster_->sendTransform(t);
+
+        t.child_frame_id = "whiteboard_center";
         t.transform.translation.x = centroid[0];
         t.transform.translation.y = centroid[1];
         t.transform.translation.z = centroid[2];
