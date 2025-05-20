@@ -162,7 +162,7 @@ private:
         //this->publishPointCloud(sor_pub_, *sor_cloud);
 
         // Publish pre-processed cloud
-        pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = sor_filter(crop_box_filter(voxel_filter(cloud)));
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = crop_box_filter(voxel_filter(cloud));
         this->publishPointCloud(pre_process_pub_, *pre_processed_cloud);
     }
 
