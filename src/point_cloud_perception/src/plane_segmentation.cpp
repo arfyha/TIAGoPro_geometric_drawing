@@ -26,9 +26,6 @@
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 #include <pcl/features/normal_3d.h>
 
-#include <vision_msgs/msg/bounding_box3_d.hpp>
-#include <vision_msgs/msg/detection3_d.hpp>
-#include <vision_msgs/msg/detection3_d_array.hpp>
 #include <visualization_msgs/msg/marker_array.hpp>
 
 
@@ -55,6 +52,8 @@ public:
         cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/pre_process_filtered_cloud");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
         radius = this->get_or_create_parameter<double>("radius", 0.05);
+        max_iterations = this->get_or_create_parameter<int>("max_iterations", 2000);
+        threshold = this->get_or_create_parameter<double>("threshold", 0.004);
 
         /*
          * SET UP SUBSCRIBER
@@ -92,10 +91,14 @@ private:
     std::string cloud_topic;
     std::string world_frame;
     double radius;
+    int max_iterations;
+    double threshold;
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
         radius = this->get_parameter("radius").get_parameter_value().get<double>();
+        max_iterations = this->get_parameter("max_iterations").get_parameter_value().get<int>();
+        threshold = this->get_parameter("threshold").get_parameter_value().get<double>();
 
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
@@ -110,8 +113,8 @@ private:
         seg.setOptimizeCoefficients (true);
         seg.setModelType (pcl::SACMODEL_PLANE);
         seg.setMethodType (pcl::SAC_RANSAC);
-        seg.setMaxIterations (200);
-        seg.setDistanceThreshold (0.004);
+        seg.setMaxIterations (max_iterations);
+        seg.setDistanceThreshold (threshold);
 
         seg.setInputCloud (cloud);
         seg.segment (*inliers, *coefficients);

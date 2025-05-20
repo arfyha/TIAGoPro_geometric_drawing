@@ -44,7 +44,9 @@ def generate_launch_description():
                 'cloud_topic': 'pre_process_filtered_cloud',
                 'world_frame': 'base_footprint',
                 'radius': 0.05,
+                'max_iterations': 1000,
+                'threshold': 0.004,
             }],
             output='screen',
-        )
+        ),
     ])
