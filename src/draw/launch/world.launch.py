@@ -42,7 +42,7 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
             'slam': launch_args.slam,
             'docking': launch_args.docking,
             'moveit': launch_args.moveit,
-            'world_name': "simple_office"
+            'world_name': "empty"
             ,
             'tuck_arm': launch_args.tuck_arm,
             'is_public_sim': launch_args.is_public_sim
@@ -70,10 +70,10 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
             arguments=[
                 '-entity', 'whiteboard',
                 '-file', whiteboard_model_path,
-                '-x', '0.75',
+                '-x', '0.8',
                 '-y', '0',
                 '-z', '0',
-                '-Y', '1.5708'
+                '-Y', '1.570796327'
             ],
             output='screen'
     )
