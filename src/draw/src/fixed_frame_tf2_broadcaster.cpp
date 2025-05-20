@@ -2,8 +2,9 @@
 #include <functional>
 #include <memory>
 
-#include "geometry_msgs/msg/transform_stamped.hpp"
-#include "rclcpp/rclcpp.hpp"
+#include <geometry_msgs/msg/transform_stamped.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <rclcpp/rclcpp.hpp>
 #include <tf2/convert.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
 #include <tf2/transform_datatypes.hpp>
@@ -21,14 +22,15 @@ public:
   : Node("fixed_frame_tf2_broadcaster")
   {
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
-    timer_ = this->create_wall_timer(
-      100ms, std::bind(&FixedFrameBroadcaster::broadcast_timer_callback, this));
+    pose_array_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
+      "/whiteboard_pose", 10,
+      std::bind(&FixedFrameBroadcaster::poseArrayCallback, this, std::placeholders::_1));
 
       roll = degToRad(this->declare_parameter("deg", 90.0));
   }
 
 private:
-  rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_sub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   tf2Scalar roll;
   const double radius_ = 0.2;
@@ -37,13 +39,40 @@ private:
   const double center_z_ = 1.0;
   const int num_points_ = 360;
 
-  void broadcast_timer_callback() {
+  void poseArrayCallback(const geometry_msgs::msg::PoseArray::SharedPtr msg){
 
     roll = degToRad(this->get_parameter("deg").as_double());
 
     geometry_msgs::msg::TransformStamped t;
     t.header.stamp = this->get_clock()->now();
     t.header.frame_id = "base_footprint";
+
+    t.child_frame_id = "whiteboard_center";
+    t.transform.translation.x = msg->poses.at(0).position.x;
+    t.transform.translation.y = msg->poses.at(0).position.y;
+    t.transform.translation.z = msg->poses.at(0).position.z;
+    t.transform.rotation = msg->poses.at(0).orientation;
+    tf_broadcaster_->sendTransform(t);
+
+    t.child_frame_id = "whiteboard_min_pt";
+    t.transform.translation.x = msg->poses.at(1).position.x;
+    t.transform.translation.y = msg->poses.at(1).position.y;
+    t.transform.translation.z = msg->poses.at(1).position.z;
+    t.transform.rotation = msg->poses.at(1).orientation;
+    tf_broadcaster_->sendTransform(t);
+    t.child_frame_id = "whiteboard_max_pt";
+    t.transform.translation.x = msg->poses.at(2).position.x;
+    t.transform.translation.y = msg->poses.at(2).position.y;
+    t.transform.translation.z = msg->poses.at(2).position.z;
+    t.transform.rotation = msg->poses.at(2).orientation;
+    tf_broadcaster_->sendTransform(t);
+    t.child_frame_id = "whiteboard_bb_center";
+    t.transform.translation.x = msg->poses.at(3).position.x;
+    t.transform.translation.y = msg->poses.at(3).position.y;
+    t.transform.translation.z = msg->poses.at(3).position.z;
+    t.transform.rotation = msg->poses.at(3).orientation;
+    tf_broadcaster_->sendTransform(t);
+
     t.child_frame_id = "circle_center";
     t.transform.translation.x = center_x_;
     t.transform.translation.y = center_y_;

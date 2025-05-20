@@ -2,6 +2,8 @@
 #include <rclcpp/rclcpp.hpp>
 
 #include <geometry_msgs/msg/point.hpp>
+#include <geometry_msgs/msg/pose_array.hpp>
+#include <geometry_msgs/msg/pose.hpp>
 #include <sensor_msgs/msg/point_cloud2.hpp>
 
 #include <tf2/convert.hpp>
@@ -43,6 +45,7 @@ public:
 
         plane_seg_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/filtered_out_cloud", 10);
         plane_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/whiteboard_cloud", 10);
+        pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/whiteboard_pose", 10);
 
         /*
          * SET UP PARAMETERS
@@ -84,6 +87,7 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr plane_seg_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr plane_pub_;
+    rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub_;
 
     /*
      * Parameters
@@ -203,37 +207,40 @@ private:
         Eigen::Vector3f center;
         pcl::getMinMax3D(*cloud, min_pt, max_pt);
         center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
-        geometry_msgs::msg::TransformStamped t;
-        t.header.stamp = this->get_clock()->now();
-        t.header.frame_id = "base_footprint";
 
-        t.child_frame_id = "min_pt";
-        t.transform.translation.x = min_pt[0];
-        t.transform.translation.y = min_pt[1];
-        t.transform.translation.z = min_pt[2];
-        tf_broadcaster_->sendTransform(t);
+        geometry_msgs::msg::PoseArray pose_array;
+        pose_array.header.stamp = this->get_clock()->now();
+        pose_array.header.frame_id = world_frame;
 
-        t.child_frame_id = "max_pt";
-        t.transform.translation.x = max_pt[0];
-        t.transform.translation.y = max_pt[1];
-        t.transform.translation.z = max_pt[2];
-        tf_broadcaster_->sendTransform(t);
+        geometry_msgs::msg::Pose pose_whiteboard;
+        pose_whiteboard.position.x = centroid[0];
+        pose_whiteboard.position.y = centroid[1];
+        pose_whiteboard.position.z = centroid[2];
+        pose_whiteboard.orientation.w = quat.w();
+        pose_whiteboard.orientation.x = quat.x();
+        pose_whiteboard.orientation.y = quat.y();
+        pose_whiteboard.orientation.z = quat.z();
+        pose_array.poses.push_back(pose_whiteboard);
 
-        t.child_frame_id = "bb_center";
-        t.transform.translation.x = center[0];
-        t.transform.translation.y = center[1];
-        t.transform.translation.z = center[2];
-        tf_broadcaster_->sendTransform(t);
+        geometry_msgs::msg::Pose pose_min_pt;
+        pose_min_pt.position.x = min_pt[0];
+        pose_min_pt.position.y = min_pt[1];
+        pose_min_pt.position.z = min_pt[2];
+        pose_array.poses.push_back(pose_min_pt);
 
-        t.child_frame_id = "whiteboard_center";
-        t.transform.translation.x = centroid[0];
-        t.transform.translation.y = centroid[1];
-        t.transform.translation.z = centroid[2];
-        t.transform.rotation.w = quat.w();
-        t.transform.rotation.x = quat.x();
-        t.transform.rotation.y = quat.y();
-        t.transform.rotation.z = quat.z();
-        tf_broadcaster_->sendTransform(t);
+        geometry_msgs::msg::Pose pose_max_pt;
+        pose_max_pt.position.x = max_pt[0];
+        pose_max_pt.position.y = max_pt[1];
+        pose_max_pt.position.z = max_pt[2];
+        pose_array.poses.push_back(pose_max_pt);
+
+        geometry_msgs::msg::Pose pose_bb_center;
+        pose_bb_center.position.x = center[0];
+        pose_bb_center.position.y = center[1];
+        pose_bb_center.position.z = center[2];
+        pose_array.poses.push_back(pose_bb_center);
+
+        pose_array_pub_->publish(pose_array);
     }
 
 };
