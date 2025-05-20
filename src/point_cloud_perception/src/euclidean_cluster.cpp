@@ -136,7 +136,7 @@ private:
 
         }
         //RCLCPP_INFO(this->get_logger(), "Largest cluster has '%lu' points", clusters.at(0)->points.size());
-        RCLCPP_INFO(this->get_logger(), "Number clusters '%lu'", clusters.size());
+        //RCLCPP_INFO(this->get_logger(), "Number clusters '%lu'", clusters.size());
         this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(index));
     }
 

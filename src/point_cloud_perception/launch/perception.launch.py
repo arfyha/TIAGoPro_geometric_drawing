@@ -35,5 +35,16 @@ def generate_launch_description():
                 'index': 0,
             }],
             output='screen',
+        ),
+        Node(
+            package='point_cloud_perception',
+            executable='plane_segmentation',
+            name='plane_segmentation_node',
+            parameters=[{
+                'cloud_topic': 'pre_process_filtered_cloud',
+                'world_frame': 'base_footprint',
+                'radius': 0.05,
+            }],
+            output='screen',
         )
     ])
