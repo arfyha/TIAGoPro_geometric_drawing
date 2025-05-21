@@ -6,6 +6,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
+#include <moveit/planning_scene_interface/planning_scene_interface.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2/convert.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
@@ -15,7 +16,7 @@
 #include <tf2_ros/transform_listener.h>
 
 static const std::string NODE_NAME = "draw_circle";
-static const std::string PLANNING_GROUP = "arm_right";
+static const std::string PLANNING_GROUP = "arm_right_torso";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
 //head_2_joint = -0.776201
@@ -43,6 +44,11 @@ public:
 
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
+
+    // Add the collision object to the scene
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+    planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
+    planning_scene_interface.applyCollisionObject(createCollisionObject());
 
     initializeOrientation();
     //addOrientationConstraint();
@@ -138,6 +144,19 @@ private:
       pose.orientation = transformStamped.transform.rotation;
 
       //auto pose_ = calculatePose(i);
+      if (i == 0){
+        move_group_interface_->setPoseTarget(pose);
+        moveit::planning_interface::MoveGroupInterface::Plan plan;
+        auto success = move_group_interface_->plan(plan);
+        if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+          RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
+          move_group_interface_->execute(plan);
+          return;
+        } else {
+          RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
+          return;
+        }
+      }
       waypoints.push_back(pose);
     }
 
@@ -145,7 +164,8 @@ private:
 
     move_group_interface_->setPlanningTime(30.0);
     move_group_interface_->setNumPlanningAttempts(100);
-    move_group_interface_->setMaxVelocityScalingFactor(0.1);
+    move_group_interface_->setMaxVelocityScalingFactor(1.0);
+    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
 
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
@@ -183,6 +203,41 @@ private:
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
     }
 
+  }
+
+  // Create collision object for the robot to avoid
+  moveit_msgs::msg::CollisionObject createCollisionObject(){
+    moveit_msgs::msg::CollisionObject collision_object;
+    collision_object.header.frame_id = "whiteboard_bb_center";
+    collision_object.header.stamp = this->now();
+    collision_object.id = "whiteboard";
+    shape_msgs::msg::SolidPrimitive primitive;
+    geometry_msgs::msg::TransformStamped whiteboard_min_pt;
+    geometry_msgs::msg::TransformStamped whiteboard_max_pt;
+    try {
+        whiteboard_min_pt = tf_buffer_->lookupTransform("whiteboard_bb_center", "whiteboard_min_pt", tf2::TimePointZero, tf2::durationFromSec(5.0));
+        whiteboard_max_pt = tf_buffer_->lookupTransform("whiteboard_bb_center", "whiteboard_max_pt", tf2::TimePointZero, tf2::durationFromSec(5.0));
+      } catch (tf2::TransformException &ex) {
+        RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
+        return collision_object;
+      }
+
+    // Define the size of the box in meters
+    primitive.type = primitive.BOX;
+    primitive.dimensions.resize(3);
+    const auto& t1 = whiteboard_max_pt.transform.translation;
+    const auto& t2 = whiteboard_min_pt.transform.translation;
+    primitive.dimensions[primitive.BOX_X] = std::abs(t1.x - t2.x); 
+    primitive.dimensions[primitive.BOX_Y] = std::abs(t1.y - t2.y);
+    primitive.dimensions[primitive.BOX_Z] = 0.05;
+
+    // Define the pose of the box (relative to the frame_id)
+    geometry_msgs::msg::Pose whiteboard_pose;
+    collision_object.primitives.push_back(primitive);
+    //collision_object.primitive_poses.push_back(whiteboard_pose);
+    collision_object.operation = collision_object.ADD;
+
+    return collision_object;
   }
 };
 

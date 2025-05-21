@@ -33,7 +33,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_sub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   tf2Scalar roll;
-  const double radius_ = 0.2;
+  const double radius_ = 0.1;
   const double center_x_ = 0.75;
   const double center_y_ = -0.0;
   const double center_z_ = 1.0;
@@ -70,6 +70,7 @@ private:
     t.transform.translation.x = msg->poses.at(3).position.x;
     t.transform.translation.y = msg->poses.at(3).position.y;
     t.transform.translation.z = msg->poses.at(3).position.z;
+    t.transform.rotation = msg->poses.at(0).orientation;
     tf_broadcaster_->sendTransform(t);
 
     t.child_frame_id = "circle_center";
@@ -91,7 +92,7 @@ private:
     t.transform.rotation = tf2::toMsg(new_q.normalized());
     tf_broadcaster_->sendTransform(t);
 
-    t.child_frame_id = "circle_center_fixed";
+    /*t.child_frame_id = "circle_center_fixed";
     t.transform.translation.x = center_x_;
     t.transform.translation.y = center_y_;
     t.transform.translation.z = center_z_;
@@ -100,7 +101,7 @@ private:
     q.normalize();
     geometry_msgs::msg::Quaternion q_msg_ = tf2::toMsg(q);
     t.transform.rotation = q_msg_;
-    tf_broadcaster_->sendTransform(t);
+    tf_broadcaster_->sendTransform(t);*/
 
     for (int i = 0; i < num_points_; ++i) {
       double angle = 2 * M_PI * i / num_points_;
