@@ -58,22 +58,40 @@ private:
     t.transform.translation.x = msg->poses.at(1).position.x;
     t.transform.translation.y = msg->poses.at(1).position.y;
     t.transform.translation.z = msg->poses.at(1).position.z;
-    t.transform.rotation = msg->poses.at(1).orientation;
     tf_broadcaster_->sendTransform(t);
+
     t.child_frame_id = "whiteboard_max_pt";
     t.transform.translation.x = msg->poses.at(2).position.x;
     t.transform.translation.y = msg->poses.at(2).position.y;
     t.transform.translation.z = msg->poses.at(2).position.z;
-    t.transform.rotation = msg->poses.at(2).orientation;
     tf_broadcaster_->sendTransform(t);
+
     t.child_frame_id = "whiteboard_bb_center";
     t.transform.translation.x = msg->poses.at(3).position.x;
     t.transform.translation.y = msg->poses.at(3).position.y;
     t.transform.translation.z = msg->poses.at(3).position.z;
-    t.transform.rotation = msg->poses.at(3).orientation;
     tf_broadcaster_->sendTransform(t);
 
     t.child_frame_id = "circle_center";
+    t.transform.translation.x = msg->poses.at(0).position.x;
+    t.transform.translation.y = msg->poses.at(0).position.y;
+    t.transform.translation.z = msg->poses.at(0).position.z;
+    // Convert the original orientation to tf2 quaternion
+    tf2::Quaternion orig_q;
+    tf2::fromMsg(msg->poses.at(0).orientation, orig_q);
+    // Create a quaternion from desired Euler angles (replace roll(z), pitch(x), yaw(y) as needed)
+    double roll_angle = M_PI / 2;   // set your desired roll in radians
+    double pitch_angle = 0.0;  // set your desired pitch in radians
+    double yaw_angle = M_PI;    // set your desired yaw in radians
+    tf2::Quaternion rot_q;
+    rot_q.setEuler(yaw_angle, pitch_angle, roll_angle);
+    // Combine the rotations: new_q = orig_q * rot_q
+    tf2::Quaternion new_q = orig_q.operator*=(rot_q);
+    // Set the result as the new orientation
+    t.transform.rotation = tf2::toMsg(new_q.normalized());
+    tf_broadcaster_->sendTransform(t);
+
+    t.child_frame_id = "circle_center_fixed";
     t.transform.translation.x = center_x_;
     t.transform.translation.y = center_y_;
     t.transform.translation.z = center_z_;
@@ -92,11 +110,7 @@ private:
       ti.child_frame_id = "circle_point_" + std::to_string(i);
       ti.transform.translation.x = radius_ * std::cos(angle);
       ti.transform.translation.y = radius_ * std::sin(angle);
-      ti.transform.translation.z = -0.18;
-      ti.transform.rotation.w = 1.0;
-      ti.transform.rotation.x = 0.0;
-      ti.transform.rotation.y = 0.0;
-      ti.transform.rotation.z = 0.0;
+      ti.transform.translation.z = -0.2;
 
       tf_broadcaster_->sendTransform(ti);
     }

@@ -34,7 +34,7 @@ private:
     t.child_frame_id = "pen_tip";
     t.transform.translation.x = 0;
     t.transform.translation.y = 0;
-    t.transform.translation.z = 0.18;
+    t.transform.translation.z = 0.2;
     t.transform.rotation.w = 1.0;
     t.transform.rotation.x = 0.0;
     t.transform.rotation.y = 0.0;

@@ -199,6 +199,7 @@ private:
         float rotation_angle = std::acos(world_z.dot(whiteboard_normal)/
                                           (world_z.norm() * whiteboard_normal.norm()));
         Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis.normalized()));
+        quat = quat.normalized();
 
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*cloud, centroid);
