@@ -7,6 +7,8 @@
 #include <moveit/move_group_interface/move_group_interface.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
 #include <moveit/planning_scene_interface/planning_scene_interface.h>
+#include <moveit/kinematics_metrics/kinematics_metrics.h>
+#include <moveit/planning_pipeline/planning_pipeline.h>
 #include <tf2_geometry_msgs/tf2_geometry_msgs.hpp>
 #include <tf2/convert.hpp>
 #include <tf2/LinearMath/Quaternion.hpp>
@@ -14,6 +16,8 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
+#include <nullspace_exploration.hpp>
+
 
 static const std::string NODE_NAME = "draw_circle";
 static const std::string PLANNING_GROUP = "arm_right_torso";
@@ -41,6 +45,14 @@ public:
       shared_from_this(), BASE_FRAME, rviz_visual_tools::RVIZ_MARKER_TOPIC,
       move_group_interface_->getRobotModel()
     );
+    nullspace_explorer_ = std::make_shared<NullspaceExplorationNode>();
+    robot_model_ = move_group_interface_->getRobotModel();
+    jmg_ = robot_model_->getJointModelGroup(PLANNING_GROUP);
+
+    move_group_interface_->setPlanningTime(30.0);
+    move_group_interface_->setNumPlanningAttempts(100);
+    move_group_interface_->setMaxVelocityScalingFactor(1.0);
+    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
 
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
@@ -62,6 +74,11 @@ private:
   std::shared_ptr<moveit_visual_tools::MoveItVisualTools> visual_tools_;
   moveit_msgs::msg::Constraints orientation_constraints_;
   geometry_msgs::msg::Quaternion q_msg_;
+
+  
+  std::shared_ptr<NullspaceExplorationNode> nullspace_explorer_;
+  moveit::core::RobotModelConstPtr robot_model_;
+  const moveit::core::JointModelGroup* jmg_;
 
   const double radius_ = 0.2;
   const double center_x_ = 0.6;
@@ -144,28 +161,53 @@ private:
       pose.orientation = transformStamped.transform.rotation;
 
       //auto pose_ = calculatePose(i);
-      if (i == 0){
-        move_group_interface_->setPoseTarget(pose);
-        moveit::planning_interface::MoveGroupInterface::Plan plan;
-        auto success = move_group_interface_->plan(plan);
-        if (success == moveit::core::MoveItErrorCode::SUCCESS) {
-          RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
-          move_group_interface_->execute(plan);
-          return;
-        } else {
-          RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
-          return;
-        }
-      }
+      
       waypoints.push_back(pose);
     }
 
-    waypoints.push_back(waypoints.front());
+    move_group_interface_->setPoseTarget(waypoints.front());
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    auto success = move_group_interface_->plan(plan);
+    if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+      std::vector<double> planned_joint_values = plan.trajectory_.joint_trajectory.points.back().positions;
+      moveit::core::RobotState end_state(robot_model_);
+      end_state.setJointGroupPositions(jmg_, planned_joint_values);
+      end_state.update();
+      std::vector<double> best_joint_values = nullspace_explorer_->explore(end_state);
+      move_group_interface_->setJointValueTarget(best_joint_values);
 
-    move_group_interface_->setPlanningTime(30.0);
-    move_group_interface_->setNumPlanningAttempts(100);
-    move_group_interface_->setMaxVelocityScalingFactor(1.0);
-    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
+      move_group_interface_->setMaxVelocityScalingFactor(1.0);  
+      move_group_interface_->setMaxAccelerationScalingFactor(1.0);
+      
+      // Plan the trajectory
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
+      bool success = (move_group_interface_->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
+      
+      if (!success)
+      {
+          RCLCPP_ERROR(this->get_logger(), "Failed to plan trajectory!");
+          return;
+      }
+
+      // Execute the planned trajectory
+      moveit::core::MoveItErrorCode result = move_group_interface_->execute(plan);
+      if (result == moveit::core::MoveItErrorCode::SUCCESS)
+      {
+          RCLCPP_INFO(this->get_logger(), "Nullspace motion executed successfully!");
+      }
+      else
+      {
+          RCLCPP_ERROR(this->get_logger(), "Nullspace motion execution failed!");
+      }
+      move_group_interface_->execute(plan);
+      RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
+      //return;
+    } else {
+      RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
+      return;
+    }
+
+    waypoints.push_back(waypoints.front());
 
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
