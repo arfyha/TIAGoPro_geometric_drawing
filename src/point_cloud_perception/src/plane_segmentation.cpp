@@ -190,14 +190,23 @@ private:
         if (avg_normal[0] > 0) {
             avg_normal = -avg_normal;
         }
+        // If the whiteboard is horizontal, ensure avg_normal points upwards (near (0,0,1))
+        if (std::abs(avg_normal[0]) < 0.3 && std::abs(avg_normal[1]) < 0.3) {
+            // Normal is close to vertical, check direction
+            if (avg_normal[2] < 0) {
+            avg_normal = -avg_normal;
+            }
+        }
+        RCLCPP_INFO(this->get_logger(), "Average normal: [%f, %f, %f]", avg_normal[0], avg_normal[1], avg_normal[2]);
 
         // Assume the whiteboard's normal is its "up" (Z) direction
         Eigen::Vector3f whiteboard_normal = avg_normal;
         Eigen::Vector3f world_z(0, 0, 1);
 
         Eigen::Vector3f rotation_axis = world_z.cross(whiteboard_normal);
-        float rotation_angle = std::acos(world_z.dot(whiteboard_normal)/
-                                          (world_z.norm() * whiteboard_normal.norm()));
+        RCLCPP_INFO(this->get_logger(), "Rotation axis: [%f, %f, %f]", rotation_axis[0], rotation_axis[1], rotation_axis[2]);
+        float rotation_angle = std::acos(world_z.dot(whiteboard_normal) / (world_z.norm() * whiteboard_normal.norm()));
+        RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
         Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis.normalized()));
         quat = quat.normalized();
 
