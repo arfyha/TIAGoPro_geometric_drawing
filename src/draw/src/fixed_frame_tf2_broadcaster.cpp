@@ -38,6 +38,13 @@ private:
   const double center_y_ = -0.0;
   const double center_z_ = 1.0;
   const int num_points_ = 360;
+  double x_start = -M_PI;
+  double x_end = M_PI;
+  double step = (x_end - x_start) / (num_points_ - 1);
+  std::function<double(double)> function = [](double x) { return std::sin(x); };
+  double scale_x = 2 * M_PI;
+  double scale_y = 10.0;
+
 
   void poseArrayCallback(const geometry_msgs::msg::PoseArray::SharedPtr msg){
 
@@ -104,17 +111,34 @@ private:
     tf_broadcaster_->sendTransform(t);*/
 
     for (int i = 0; i < num_points_; ++i) {
-      double angle = 2 * M_PI * i / num_points_;
       geometry_msgs::msg::TransformStamped ti;
       ti.header.stamp = this->get_clock()->now();
       ti.header.frame_id = "circle_center";
       ti.child_frame_id = "circle_point_" + std::to_string(i);
-      ti.transform.translation.x = radius_ * std::cos(angle);
-      ti.transform.translation.y = radius_ * std::sin(angle);
+      std::vector<double> point = calculateCirclePoints(i);
+      ti.transform.translation.x = -point.at(0);
+      ti.transform.translation.y = point.at(1);
       ti.transform.translation.z = -0.2;
 
       tf_broadcaster_->sendTransform(ti);
     }
+  }
+
+  // Function to calculate the i-th point on y = 2*x between x = -5 and x = 5
+  std::vector<double> calculatePointsFunction(int i) {
+    // num_points_: total number of points
+    // i: index of the point (0-based)
+    double x = x_start + i * step;
+    double y = function(x);
+    RCLCPP_INFO(this->get_logger(), "Point %d: x = %f, y = %f", i, x, y);
+    return {x/scale_x, y/scale_y};
+  }
+
+  std::vector<double> calculateCirclePoints(int i) {
+    double angle = 2 * M_PI * i / num_points_;
+    double x = radius_ * std::cos(angle);
+    double y = radius_ * std::sin(angle);
+    return {x, y};
   }
 
   double degToRad(double degrees) {
