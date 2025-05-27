@@ -14,17 +14,21 @@ find_package(tf2_geometry_msgs REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_eigen REQUIRED)
+find_package(moveit_core REQUIRED)
+find_package(Eigen3 REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(control_msgs REQUIRED)
+
+add_library(nullspace_explorer_lib src/nullspace_exploration.cpp)
 
 add_executable(draw_circle_air src/draw_circle_air.cpp)
-add_executable(draw_circle_whiteboard src/draw_circle_whiteboard.cpp)
+
+target_link_libraries(draw_circle_air nullspace_explorer_lib)
+
+
 target_include_directories(draw_circle_air PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
-target_include_directories(draw_circle_whiteboard PUBLIC
-  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-  $<INSTALL_INTERFACE:include>)
-target_compile_features(draw_circle_air PUBLIC c_std_99 cxx_std_17)
-target_compile_features(draw_circle_whiteboard PUBLIC c_std_99 cxx_std_17)  # Require C99 and C++17
 ament_target_dependencies(
   draw_circle_air
   moveit_ros_planning_interface
@@ -35,6 +39,11 @@ ament_target_dependencies(
   tf2_ros 
   tf2_eigen
 )
+
+add_executable(draw_circle_whiteboard src/draw_circle_whiteboard.cpp)
+target_include_directories(draw_circle_whiteboard PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(
   draw_circle_whiteboard
   moveit_ros_planning_interface
@@ -66,11 +75,24 @@ ament_target_dependencies(
     tf2_eigen
 )
 
+target_include_directories(nullspace_explorer_lib PUBLIC include ${rclcpp_INCLUDE_DIRS})
+target_include_directories(nullspace_explorer_lib PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include>)
+ament_target_dependencies(
+    nullspace_explorer_lib
+    rclcpp 
+    moveit_core
+    moveit_ros_planning_interface
+    control_msgs
+)
+
 install(TARGETS 
   draw_circle_air
   draw_circle_whiteboard
   fixed_frame_tf2_broadcaster
   frame_broadcaster
+  nullspace_explorer_lib
   DESTINATION lib/${PROJECT_NAME})
 
   # Install launch files.
@@ -79,17 +101,5 @@ install(DIRECTORY
   models
   DESTINATION share/${PROJECT_NAME}/
 )
-
-if(BUILD_TESTING)
-  find_package(ament_lint_auto REQUIRED)
-  # the following line skips the linter which checks for copyrights
-  # comment the line when a copyright and license is added to all source files
-  set(ament_cmake_copyright_FOUND TRUE)
-  # the following line skips cpplint (only works in a git repo)
-  # comment the line when this package is in a git repo and when
-  # a copyright and license is added to all source files
-  set(ament_cmake_cpplint_FOUND TRUE)
-  ament_lint_auto_find_test_dependencies()
-endif()
 
 ament_package()
