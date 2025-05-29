@@ -21,16 +21,16 @@ find_package(control_msgs REQUIRED)
 
 add_library(nullspace_explorer_lib src/nullspace_exploration.cpp)
 
-add_executable(draw_circle_air src/draw_circle_air.cpp)
+add_executable(draw_function_whiteboard src/draw_function_whiteboard.cpp)
 
-target_link_libraries(draw_circle_air nullspace_explorer_lib)
+target_link_libraries(draw_function_whiteboard nullspace_explorer_lib)
 
 
-target_include_directories(draw_circle_air PUBLIC
+target_include_directories(draw_function_whiteboard PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(
-  draw_circle_air
+  draw_function_whiteboard
   moveit_ros_planning_interface
   rclcpp
   moveit_visual_tools
@@ -88,7 +88,7 @@ ament_target_dependencies(
 )
 
 install(TARGETS 
-  draw_circle_air
+  draw_function_whiteboard
   draw_circle_whiteboard
   fixed_frame_tf2_broadcaster
   frame_broadcaster

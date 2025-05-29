@@ -19,16 +19,14 @@
 #include <draw/nullspace_exploration.hpp>
 
 
-static const std::string NODE_NAME = "draw_circle";
+static const std::string NODE_NAME = "draw_function_whiteboard_node";
 static const std::string PLANNING_GROUP = "arm_right_torso";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
-//head_2_joint = -0.776201
-//torso_joint = 0.25
 
-class DrawCircleNode : public rclcpp::Node {
+class DrawFunctionWhiteboardNode : public rclcpp::Node {
 public:
-  DrawCircleNode()
+  DrawFunctionWhiteboardNode()
     : Node(NODE_NAME, rclcpp::NodeOptions()
       .automatically_declare_parameters_from_overrides(true)) 
     {
@@ -66,7 +64,7 @@ public:
     //addOrientationConstraint();
     logBasicInfo();
 
-    drawCircle();
+    drawFunction();
   }
 
 private:
@@ -144,7 +142,7 @@ private:
     return std::make_pair(success, plan);
   }
 
-  void drawCircle() {
+  void drawFunction() {
     std::vector<geometry_msgs::msg::Pose> waypoints;
     for (int i = 0; i < num_points_; ++i) {
       geometry_msgs::msg::TransformStamped transformStamped;
@@ -247,7 +245,7 @@ private:
         plan.trajectory_ = trajectory;
         move_group_interface_->execute(plan);
 
-        RCLCPP_INFO(this->get_logger(), "Circle drawn successfully.");
+        RCLCPP_INFO(this->get_logger(), "Function drawn successfully.");
     } else {
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
     }
@@ -294,7 +292,7 @@ private:
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
 
-  auto node = std::make_shared<DrawCircleNode>();
+  auto node = std::make_shared<DrawFunctionWhiteboardNode>();
   node->initialize();
   rclcpp::spin(node);
 
