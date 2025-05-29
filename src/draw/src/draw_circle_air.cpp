@@ -16,7 +16,7 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
-#include <nullspace_exploration.hpp>
+#include <draw/nullspace_exploration.hpp>
 
 
 static const std::string NODE_NAME = "draw_circle";
@@ -149,7 +149,7 @@ private:
     for (int i = 0; i < num_points_; ++i) {
       geometry_msgs::msg::TransformStamped transformStamped;
       try {
-        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "circle_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(5.0));
+        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(5.0));
       } catch (tf2::TransformException &ex) {
         RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
         return;
@@ -169,19 +169,21 @@ private:
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     auto success = move_group_interface_->plan(plan);
     if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+      //move_group_interface_->execute(plan);
+      //RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
+
+      //Nullspace exploration
+      move_group_interface_->clearPoseTargets();
       std::vector<double> planned_joint_values = plan.trajectory_.joint_trajectory.points.back().positions;
       moveit::core::RobotState end_state(robot_model_);
       end_state.setJointGroupPositions(jmg_, planned_joint_values);
       end_state.update();
       std::vector<double> best_joint_values = nullspace_explorer_->explore(end_state);
       move_group_interface_->setJointValueTarget(best_joint_values);
-
-      move_group_interface_->setMaxVelocityScalingFactor(1.0);  
-      move_group_interface_->setMaxAccelerationScalingFactor(1.0);
       
       // Plan the trajectory
-      moveit::planning_interface::MoveGroupInterface::Plan plan;
-      bool success = (move_group_interface_->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
+      moveit::planning_interface::MoveGroupInterface::Plan plan_joints;
+      bool success = (move_group_interface_->plan(plan_joints) == moveit::core::MoveItErrorCode::SUCCESS);
       
       if (!success)
       {
@@ -194,20 +196,25 @@ private:
       if (result == moveit::core::MoveItErrorCode::SUCCESS)
       {
           RCLCPP_INFO(this->get_logger(), "Nullspace motion executed successfully!");
+          /*auto current_pose = move_group_interface_->getCurrentPose("arm_right_7_link");
+          for (auto waypoint : waypoints){
+              waypoint.orientation = current_pose.pose.orientation;
+          }
+          return;*/
       }
       else
       {
           RCLCPP_ERROR(this->get_logger(), "Nullspace motion execution failed!");
+          return;
       }
-      move_group_interface_->execute(plan);
-      RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
+
       //return;
     } else {
       RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
       return;
     }
 
-    waypoints.push_back(waypoints.front());
+    //waypoints.push_back(waypoints.front());
 
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
@@ -275,8 +282,9 @@ private:
 
     // Define the pose of the box (relative to the frame_id)
     geometry_msgs::msg::Pose whiteboard_pose;
+    whiteboard_pose.position.z = -0.025; // Half of the height
     collision_object.primitives.push_back(primitive);
-    //collision_object.primitive_poses.push_back(whiteboard_pose);
+    collision_object.primitive_poses.push_back(whiteboard_pose);
     collision_object.operation = collision_object.ADD;
 
     return collision_object;
