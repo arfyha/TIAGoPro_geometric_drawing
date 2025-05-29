@@ -40,12 +40,12 @@ ament_target_dependencies(
   tf2_eigen
 )
 
-add_executable(draw_circle_whiteboard src/draw_circle_whiteboard.cpp)
-target_include_directories(draw_circle_whiteboard PUBLIC
+add_executable(draw_function_air src/draw_function_air.cpp)
+target_include_directories(draw_function_air PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 ament_target_dependencies(
-  draw_circle_whiteboard
+  draw_function_air
   moveit_ros_planning_interface
   rclcpp
   moveit_visual_tools
@@ -89,7 +89,7 @@ ament_target_dependencies(
 
 install(TARGETS 
   draw_function_whiteboard
-  draw_circle_whiteboard
+  draw_function_air
   fixed_frame_tf2_broadcaster
   frame_broadcaster
   nullspace_explorer_lib
