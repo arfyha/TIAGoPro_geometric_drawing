@@ -42,7 +42,7 @@ private:
   double x_end = M_PI;
   double step = (x_end - x_start) / (num_points_ - 1);
   std::function<double(double)> function = [](double x) { return std::sin(x); };
-  double scale_x = 2 * M_PI;
+  double scale_x = 4 * M_PI;
   double scale_y = 10.0;
 
 
@@ -80,26 +80,31 @@ private:
     t.transform.rotation = msg->poses.at(0).orientation;
     tf_broadcaster_->sendTransform(t);
 
-    t.child_frame_id = "circle_center";
+    t.child_frame_id = "function_center";
     t.transform.translation.x = msg->poses.at(0).position.x;
     t.transform.translation.y = msg->poses.at(0).position.y;
     t.transform.translation.z = msg->poses.at(0).position.z;
+
     // Convert the original orientation to tf2 quaternion
     tf2::Quaternion orig_q;
     tf2::fromMsg(msg->poses.at(0).orientation, orig_q);
+
     // Create a quaternion from desired Euler angles (replace roll(z), pitch(x), yaw(y) as needed)
     double roll_angle = M_PI / 2;   // set your desired roll in radians
     double pitch_angle = 0.0;  // set your desired pitch in radians
     double yaw_angle = M_PI;    // set your desired yaw in radians
     tf2::Quaternion rot_q;
     rot_q.setEuler(yaw_angle, pitch_angle, roll_angle);
+
     // Combine the rotations: new_q = orig_q * rot_q
     tf2::Quaternion new_q = orig_q.operator*=(rot_q);
+
     // Set the result as the new orientation
     t.transform.rotation = tf2::toMsg(new_q.normalized());
     tf_broadcaster_->sendTransform(t);
 
-    /*t.child_frame_id = "circle_center_fixed";
+    // Uncomment the following lines if you want to broadcast a fixed frame for the function center
+    /*t.child_frame_id = "function_center_fixed";
     t.transform.translation.x = center_x_;
     t.transform.translation.y = center_y_;
     t.transform.translation.z = center_z_;
@@ -113,9 +118,9 @@ private:
     for (int i = 0; i < num_points_; ++i) {
       geometry_msgs::msg::TransformStamped ti;
       ti.header.stamp = this->get_clock()->now();
-      ti.header.frame_id = "circle_center";
-      ti.child_frame_id = "circle_point_" + std::to_string(i);
-      std::vector<double> point = calculateCirclePoints(i);
+      ti.header.frame_id = "function_center";
+      ti.child_frame_id = "function_point_" + std::to_string(i);
+      std::vector<double> point = calculatePointsFunction(i);
       ti.transform.translation.x = -point.at(0);
       ti.transform.translation.y = point.at(1);
       ti.transform.translation.z = -0.2;
@@ -124,13 +129,11 @@ private:
     }
   }
 
-  // Function to calculate the i-th point on y = 2*x between x = -5 and x = 5
+  // Calculate the i-th point in the function
+  // The function is scaled to fit within the specified range
   std::vector<double> calculatePointsFunction(int i) {
-    // num_points_: total number of points
-    // i: index of the point (0-based)
     double x = x_start + i * step;
     double y = function(x);
-    RCLCPP_INFO(this->get_logger(), "Point %d: x = %f, y = %f", i, x, y);
     return {x/scale_x, y/scale_y};
   }
 
