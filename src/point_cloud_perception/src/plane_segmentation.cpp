@@ -186,10 +186,17 @@ private:
         for (const auto &normal : *normals) {
             avg_normal += Eigen::Vector3f(normal.normal_x, normal.normal_y, normal.normal_z);
         }
+
+        if (std::isnan(avg_normal[0]) || std::isnan(avg_normal[1]) || std::isnan(avg_normal[2])) {
+            RCLCPP_WARN(this->get_logger(), "Normal estimation failed or produced NaN values. Skipping feature computation.");
+            return;
+        }
+
         avg_normal = avg_normal.normalized(); // Unit vector
         if (avg_normal[0] > 0) {
             avg_normal = -avg_normal;
         }
+        
         // If the whiteboard is horizontal, ensure avg_normal points upwards (near (0,0,1))
         if (std::abs(avg_normal[0]) < 0.3 && std::abs(avg_normal[1]) < 0.3) {
             // Normal is close to vertical, check direction
