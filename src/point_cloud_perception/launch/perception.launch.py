@@ -15,7 +15,7 @@ def generate_launch_description():
                 'x_filter_max': 2.0,
                 'y_filter_min': -1.2,
                 'y_filter_max': 1.2,
-                'z_filter_min': 0.1,
+                'z_filter_min': 0.0,
                 'z_filter_max': 1.8,
                 'nr_k': 100,
                 'stddev_mult': 0.5,
@@ -41,7 +41,7 @@ def generate_launch_description():
             executable='plane_segmentation',
             name='plane_segmentation_node',
             parameters=[{
-                'cloud_topic': 'pre_process_filtered_cloud',
+                'cloud_topic': 'euclidean_cluster_cloud',
                 'world_frame': 'base_footprint',
                 'radius': 0.05,
                 'max_iterations': 1000,
