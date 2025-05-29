@@ -60,74 +60,20 @@ public:
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
     planning_scene_interface.applyCollisionObject(createCollisionObject());
 
-    initializeOrientation();
-    //addOrientationConstraint();
-    logBasicInfo();
-
     drawFunction();
   }
 
 private:
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_interface_;
   std::shared_ptr<moveit_visual_tools::MoveItVisualTools> visual_tools_;
-  moveit_msgs::msg::Constraints orientation_constraints_;
-  geometry_msgs::msg::Quaternion q_msg_;
-
   
   std::shared_ptr<NullspaceExplorationNode> nullspace_explorer_;
   moveit::core::RobotModelConstPtr robot_model_;
   const moveit::core::JointModelGroup* jmg_;
 
-  const double radius_ = 0.2;
-  const double center_x_ = 0.6;
-  const double center_y_ = -0.17;
-  const double center_z_ = 0.75;
-  const int num_points_ = 360;
-
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> br;
-
-  void initializeOrientation() {
-    tf2::Quaternion q;
-    q.setRPY(M_PI / 2, 0, M_PI / 2);
-    q.normalize();
-    q_msg_ = tf2::toMsg(q);
-  }
-
-  void logBasicInfo() {
-    RCLCPP_INFO(this->get_logger(), "Planning frame: %s", move_group_interface_->getPlanningFrame().c_str());
-    RCLCPP_INFO(this->get_logger(), "End effector link: %s", move_group_interface_->getEndEffectorLink().c_str());
-    RCLCPP_INFO(this->get_logger(), "Available Planning Groups:");
-    for (const auto &group : move_group_interface_->getJointModelGroupNames()) {
-      std::cout << "  - " << group << std::endl;
-    }
-  }
-
-  void addOrientationConstraint() {
-    moveit_msgs::msg::OrientationConstraint ocm;
-    ocm.header.frame_id = move_group_interface_->getPoseReferenceFrame();
-    ocm.link_name = move_group_interface_->getEndEffectorLink();
-    ocm.orientation = q_msg_;
-    ocm.absolute_x_axis_tolerance = M_PI;
-    ocm.absolute_y_axis_tolerance = 0.2;
-    ocm.absolute_z_axis_tolerance = 0.2;
-    ocm.weight = 1.0;
-
-    orientation_constraints_.orientation_constraints.push_back(ocm);
-  }
-
-  geometry_msgs::msg::Pose calculatePose(int i) {
-    double angle = 2 * M_PI * i / num_points_;
-
-    geometry_msgs::msg::Pose pose;
-    pose.position.x = center_x_;
-    pose.position.y = center_y_ + radius_ * std::cos(angle);
-    pose.position.z = center_z_ + radius_ * std::sin(angle);
-    pose.orientation = q_msg_;
-
-    return pose;
-  }
 
   void drawTitle(const std::string &text) {
     Eigen::Isometry3d text_pose = Eigen::Isometry3d::Identity();
@@ -136,15 +82,9 @@ private:
     visual_tools_->publishText(text_pose, text, rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
   }
 
-  std::pair<bool, moveit::planning_interface::MoveGroupInterface::Plan> createPlan() {
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    bool success = (move_group_interface_->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
-    return std::make_pair(success, plan);
-  }
-
   void drawFunction() {
     std::vector<geometry_msgs::msg::Pose> waypoints;
-    for (int i = 0; i < num_points_; ++i) {
+    for (int i = 0; i < 360; ++i) {
       geometry_msgs::msg::TransformStamped transformStamped;
       try {
         transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(5.0));
