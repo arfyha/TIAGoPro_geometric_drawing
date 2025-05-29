@@ -97,12 +97,6 @@ private:
     visual_tools_->publishText(text_pose, text, rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
   }
 
-  std::pair<bool, moveit::planning_interface::MoveGroupInterface::Plan> createPlan() {
-    moveit::planning_interface::MoveGroupInterface::Plan plan;
-    bool success = (move_group_interface_->plan(plan) == moveit::core::MoveItErrorCode::SUCCESS);
-    return std::make_pair(success, plan);
-  }
-
   void drawFunction() {
     std::vector<geometry_msgs::msg::Pose> waypoints;
     for (int i = 0; i < num_points_; ++i) {
