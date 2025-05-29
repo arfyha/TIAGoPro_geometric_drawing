@@ -53,9 +53,9 @@ private:
   geometry_msgs::msg::Quaternion q_msg_;
 
   const double radius_ = 0.2;
-  const double center_x_ = 0.6;
-  const double center_y_ = -0.17;
-  const double center_z_ = 0.75;
+  const double center_x_ = 0.65;
+  const double center_y_ = 0.0;
+  const double center_z_ = 1.0;
   const int num_points_ = 360;
 
   void initializeOrientation() {
@@ -83,7 +83,8 @@ private:
 
     geometry_msgs::msg::Pose pose;
     pose.position.x = center_x_;
-    pose.position.y = center_y_ + radius_ * std::cos(angle);
+    // Mirror the function by negating the y coordinate
+    pose.position.y = center_y_ - radius_ * std::cos(angle);
     pose.position.z = center_z_ + radius_ * std::sin(angle);
     pose.orientation = q_msg_;
 
@@ -106,6 +107,17 @@ private:
     }
     waypoints.push_back(waypoints.front());
 
+    move_group_interface_->setPoseTarget(waypoints.front());
+    moveit::planning_interface::MoveGroupInterface::Plan plan;
+    auto success = move_group_interface_->plan(plan);
+    if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+      move_group_interface_->execute(plan);
+      RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
+    } else {
+      RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
+      return;
+    }
+
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
     const double eef_step = 0.001;
@@ -113,7 +125,7 @@ private:
     int attempt = 0;
     int max_attempts = 100;
 
-    while(fraction < 0.9 && attempt < max_attempts) {
+    while(fraction < 0.95 && attempt < max_attempts) {
       move_group_interface_->setStartStateToCurrentState();
       fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
       RCLCPP_INFO(this->get_logger(), "Computing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
