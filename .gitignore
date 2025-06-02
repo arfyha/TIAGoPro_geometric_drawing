@@ -4,3 +4,5 @@ log/
 .vscode/
 *.pyc
 .DS_Store
+install_pal_deploy_release
+build_pal_deploy_release
