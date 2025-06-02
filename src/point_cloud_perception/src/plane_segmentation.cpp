@@ -52,7 +52,6 @@ public:
         plane_seg_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/filtered_out_cloud", 10);
         plane_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/whiteboard_cloud", 10);
         pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/whiteboard_pose", 10);
-        final_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/final_cloud", 10);
         //chull_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/whiteboard_chull", 10);
 
         /*
@@ -95,7 +94,6 @@ private:
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr plane_seg_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr plane_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub_;
-        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr final_cloud_pub_;
     //rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr chull_pub_;
 
     /*
@@ -126,6 +124,10 @@ private:
         ransac.getModelCoefficients(model_coefficients);
         RCLCPP_INFO(this->get_logger(), "Model coefficients: [%f, %f, %f, %f]", 
             model_coefficients[0], model_coefficients[1], model_coefficients[2], model_coefficients[3]);
+        Eigen::VectorXf optimzed_model_coefficients;
+        model_p->optimizeModelCoefficients(inliers, model_coefficients, optimzed_model_coefficients);
+        RCLCPP_INFO(this->get_logger(), "Optimized model coefficients: [%f, %f, %f, %f]", 
+            optimzed_model_coefficients[0], optimzed_model_coefficients[1], optimzed_model_coefficients[2], optimzed_model_coefficients[3]);
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZ> extract;
@@ -150,7 +152,7 @@ private:
         chull.setAlpha (0.1);
         chull.reconstruct (*cloud_hull);*/
 
-        computeWhiteboardFeatures(whiteboard_cloud, model_coefficients);
+        computeWhiteboardFeatures(whiteboard_cloud, optimzed_model_coefficients);
 
         this->publishPointCloud(plane_pub_, *whiteboard_cloud);
         this->publishPointCloud(plane_seg_pub_, *filtered_out_cloud);
