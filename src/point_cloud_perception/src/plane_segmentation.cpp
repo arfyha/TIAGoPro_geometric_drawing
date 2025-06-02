@@ -126,6 +126,8 @@ private:
         {
             RCLCPP_WARN(this->get_logger(), "Could not estimate a planar model for the given dataset.") ;
         }
+        RCLCPP_INFO(this->get_logger(), "Plane model coefficients: [%f, %f, %f, %f]", 
+            coefficients->values.at(0), coefficients->values.at(1), coefficients->values.at(2), coefficients->values.at(3));
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZ> extract;
@@ -141,7 +143,7 @@ private:
         extract.setNegative (true);
         extract.filter (*cloud_filtered_out);
 
-        computeWhiteboardFeatures(cloud_whiteboard);
+        computeWhiteboardFeatures(cloud_whiteboard, coefficients);
 
         this->publishPointCloud(plane_pub_, *cloud_whiteboard);
         this->publishPointCloud(plane_seg_pub_, *cloud_filtered_out);
@@ -170,10 +172,11 @@ private:
         return value;
     }
 
-    void computeWhiteboardFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud){
+    void computeWhiteboardFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
+                                   const pcl::ModelCoefficients::Ptr &coefficients){
 
         // Create NormalEstimation object
-        pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
+        /*pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
         pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
         pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
 
@@ -190,8 +193,9 @@ private:
         if (std::isnan(avg_normal[0]) || std::isnan(avg_normal[1]) || std::isnan(avg_normal[2])) {
             RCLCPP_WARN(this->get_logger(), "Normal estimation failed or produced NaN values. Skipping feature computation.");
             return;
-        }
+        }*/
 
+        Eigen::Vector3f avg_normal = Eigen::Vector3f(coefficients->values.at(0), coefficients->values.at(1), coefficients->values.at(2));
         avg_normal = avg_normal.normalized(); // Unit vector
         if (avg_normal[0] > 0) {
             avg_normal = -avg_normal;
