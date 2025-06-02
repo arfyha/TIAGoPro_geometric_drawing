@@ -148,22 +148,24 @@ private:
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(transformed_cloud, *cloud);
+        RCLCPP_INFO(this->get_logger(), "Received point cloud with %zu points", cloud->size());
         
         // Publish voxel filtered cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_cloud = voxel_filter(cloud);
         this->publishPointCloud(voxel_pub_, *voxel_cloud);
 
         // Publish crop filtered cloud
-        pcl::PointCloud<pcl::PointXYZ>::Ptr crop_cloud = crop_box_filter(cloud);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr crop_cloud = crop_box_filter(voxel_cloud);
         this->publishPointCloud(crop_pub_, *crop_cloud);
 
         // Publish SOR filtered cloud
-        //pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud = sor_filter(cloud);
+        //pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud = sor_filter(crop_cloud);
         //this->publishPointCloud(sor_pub_, *sor_cloud);
 
         // Publish pre-processed cloud
-        pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = crop_box_filter(voxel_filter(cloud));
+        pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = sor_filter(crop_box_filter(voxel_filter(cloud)));
         this->publishPointCloud(pre_process_pub_, *pre_processed_cloud);
+        RCLCPP_INFO(this->get_logger(), "Pre-processed point cloud with %zu points", pre_processed_cloud->size());
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_filter(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud){
