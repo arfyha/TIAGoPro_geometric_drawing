@@ -28,6 +28,12 @@
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 #include <pcl/features/normal_3d.h>
 
+#include <pcl/surface/concave_hull.h>
+#include <pcl/surface/convex_hull.h>
+#include <pcl/sample_consensus/ransac.h>
+#include <pcl/sample_consensus/sac_model_plane.h>
+#include <pcl/common/io.h>
+
 #include <visualization_msgs/msg/marker_array.hpp>
 
 
@@ -46,6 +52,8 @@ public:
         plane_seg_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/filtered_out_cloud", 10);
         plane_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/whiteboard_cloud", 10);
         pose_array_pub_ = this->create_publisher<geometry_msgs::msg::PoseArray>("/whiteboard_pose", 10);
+        final_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/final_cloud", 10);
+        //chull_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/whiteboard_chull", 10);
 
         /*
          * SET UP PARAMETERS
@@ -54,8 +62,6 @@ public:
 
         cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/pre_process_filtered_cloud");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
-        radius = this->get_or_create_parameter<double>("radius", 0.05);
-        max_iterations = this->get_or_create_parameter<int>("max_iterations", 2000);
         threshold = this->get_or_create_parameter<double>("threshold", 0.004);
 
         /*
@@ -85,68 +91,70 @@ private:
      * Subscriber and Publisher declaration
      */
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
+
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr plane_seg_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr plane_pub_;
     rclcpp::Publisher<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_pub_;
+        rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr final_cloud_pub_;
+    //rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr chull_pub_;
 
     /*
      * Parameters
      */
     std::string cloud_topic;
     std::string world_frame;
-    double radius;
-    int max_iterations;
     double threshold;
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
-        radius = this->get_parameter("radius").get_parameter_value().get<double>();
-        max_iterations = this->get_parameter("max_iterations").get_parameter_value().get<int>();
         threshold = this->get_parameter("threshold").get_parameter_value().get<double>();
 
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(*point_cloud_msg, *cloud);
 
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_filtered_out (new pcl::PointCloud<pcl::PointXYZ>);
-        pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_whiteboard (new pcl::PointCloud<pcl::PointXYZ> ());
+        pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_out_cloud (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::PointCloud<pcl::PointXYZ>::Ptr whiteboard_cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
-        pcl::SACSegmentation<pcl::PointXYZ> seg;
-        pcl::PointIndices::Ptr inliers (new pcl::PointIndices);
-        pcl::ModelCoefficients::Ptr coefficients (new pcl::ModelCoefficients);
-        seg.setOptimizeCoefficients (true);
-        seg.setModelType (pcl::SACMODEL_PLANE);
-        seg.setMethodType (pcl::SAC_RANSAC);
-        seg.setMaxIterations (max_iterations);
-        seg.setDistanceThreshold (threshold);
-
-        seg.setInputCloud (cloud);
-        seg.segment (*inliers, *coefficients);
-        if (inliers->indices.size () == 0)
-        {
-            RCLCPP_WARN(this->get_logger(), "Could not estimate a planar model for the given dataset.") ;
-        }
-        RCLCPP_INFO(this->get_logger(), "Plane model coefficients: [%f, %f, %f, %f]", 
-            coefficients->values.at(0), coefficients->values.at(1), coefficients->values.at(2), coefficients->values.at(3));
+        pcl::SampleConsensusModelPlane<pcl::PointXYZ>::Ptr model_p (new pcl::SampleConsensusModelPlane<pcl::PointXYZ> (cloud));
+        pcl::RandomSampleConsensus<pcl::PointXYZ> ransac (model_p);
+        std::vector<int> inliers;
+        ransac.setDistanceThreshold (threshold);
+        ransac.computeModel();
+        ransac.getInliers(inliers);
+        Eigen::VectorXf model_coefficients;
+        ransac.getModelCoefficients(model_coefficients);
+        RCLCPP_INFO(this->get_logger(), "Model coefficients: [%f, %f, %f, %f]", 
+            model_coefficients[0], model_coefficients[1], model_coefficients[2], model_coefficients[3]);
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZ> extract;
         extract.setInputCloud (cloud);
-        extract.setIndices(inliers);
+        pcl::PointIndices::Ptr inliers_ptr(new pcl::PointIndices);
+        inliers_ptr->indices = inliers;
+        extract.setIndices(inliers_ptr);
         extract.setNegative (false);
 
         // Get the points associated with the planar surface
-        extract.filter (*cloud_whiteboard);
-        //RCLCPP_INFO(this->get_logger(), "PointCloud2 representing the planar component: '%lu' data points.", cloud_plane->points.size());
+        extract.filter (*whiteboard_cloud);
+        RCLCPP_INFO(this->get_logger(), "PointCloud2 representing the planar component: '%lu' data points.", whiteboard_cloud->points.size());
         
         // Remove the planar inliers, extract the rest
         extract.setNegative (true);
-        extract.filter (*cloud_filtered_out);
+        extract.filter (*filtered_out_cloud);
 
-        computeWhiteboardFeatures(cloud_whiteboard, coefficients);
+        // Create a Concave Hull representation of the projected inliers
+        /*pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_hull (new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::ConcaveHull<pcl::PointXYZ> chull;
+        chull.setInputCloud (whiteboard_cloud);
+        chull.setAlpha (0.1);
+        chull.reconstruct (*cloud_hull);*/
 
-        this->publishPointCloud(plane_pub_, *cloud_whiteboard);
-        this->publishPointCloud(plane_seg_pub_, *cloud_filtered_out);
+        computeWhiteboardFeatures(whiteboard_cloud, model_coefficients);
+
+        this->publishPointCloud(plane_pub_, *whiteboard_cloud);
+        this->publishPointCloud(plane_seg_pub_, *filtered_out_cloud);
+        //this->publishPointCloud(chull_pub_, *cloud_hull);
     }
 
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,
@@ -173,45 +181,24 @@ private:
     }
 
     void computeWhiteboardFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
-                                   const pcl::ModelCoefficients::Ptr &coefficients){
+                                   const Eigen::VectorXf & model_coefficients){
 
-        // Create NormalEstimation object
-        /*pcl::NormalEstimation<pcl::PointXYZ, pcl::Normal> ne;
-        pcl::PointCloud<pcl::Normal>::Ptr normals(new pcl::PointCloud<pcl::Normal>);
-        pcl::search::KdTree<pcl::PointXYZ>::Ptr tree(new pcl::search::KdTree<pcl::PointXYZ>());
-
-        ne.setInputCloud(cloud);
-        ne.setSearchMethod(tree);
-        ne.setRadiusSearch(radius);
-        ne.compute(*normals);
-
-        Eigen::Vector3f avg_normal = Eigen::Vector3f::Zero();
-        for (const auto &normal : *normals) {
-            avg_normal += Eigen::Vector3f(normal.normal_x, normal.normal_y, normal.normal_z);
-        }
-
-        if (std::isnan(avg_normal[0]) || std::isnan(avg_normal[1]) || std::isnan(avg_normal[2])) {
-            RCLCPP_WARN(this->get_logger(), "Normal estimation failed or produced NaN values. Skipping feature computation.");
-            return;
-        }*/
-
-        Eigen::Vector3f avg_normal = Eigen::Vector3f(coefficients->values.at(0), coefficients->values.at(1), coefficients->values.at(2));
-        avg_normal = avg_normal.normalized(); // Unit vector
-        if (avg_normal[0] > 0) {
-            avg_normal = -avg_normal;
+        Eigen::Vector3f whiteboard_normal = Eigen::Vector3f(model_coefficients[0], model_coefficients[1], model_coefficients[2]);
+        whiteboard_normal = whiteboard_normal.normalized(); // Unit vector
+        if (whiteboard_normal[0] > 0) {
+            whiteboard_normal = -whiteboard_normal;
         }
         
         // If the whiteboard is horizontal, ensure avg_normal points upwards (near (0,0,1))
-        if (std::abs(avg_normal[0]) < 0.3 && std::abs(avg_normal[1]) < 0.3) {
+        if (std::abs(whiteboard_normal[0]) < 0.3 && std::abs(whiteboard_normal[1]) < 0.3) {
             // Normal is close to vertical, check direction
-            if (avg_normal[2] < 0) {
-            avg_normal = -avg_normal;
+            if (whiteboard_normal[2] < 0) {
+            whiteboard_normal = -whiteboard_normal;
             }
         }
-        RCLCPP_INFO(this->get_logger(), "Average normal: [%f, %f, %f]", avg_normal[0], avg_normal[1], avg_normal[2]);
+        RCLCPP_INFO(this->get_logger(), "Average normal: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
 
         // Assume the whiteboard's normal is its "up" (Z) direction
-        Eigen::Vector3f whiteboard_normal = avg_normal;
         Eigen::Vector3f world_z(0, 0, 1);
 
         Eigen::Vector3f rotation_axis = world_z.cross(whiteboard_normal);
