@@ -55,7 +55,7 @@ public:
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
 
-    // Add the collision object to the scene
+    // Remove all collision objects then add the collision object to the scene
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
     planning_scene_interface.applyCollisionObject(createCollisionObject());
@@ -107,9 +107,9 @@ private:
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     auto success = move_group_interface_->plan(plan);
     if (success == moveit::core::MoveItErrorCode::SUCCESS) {
-      //move_group_interface_->execute(plan);
-      //RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
-
+      move_group_interface_->execute(plan);
+      RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
+/*
       //Nullspace exploration
       move_group_interface_->clearPoseTargets();
       std::vector<double> planned_joint_values = plan.trajectory_.joint_trajectory.points.back().positions;
@@ -134,18 +134,18 @@ private:
       if (result == moveit::core::MoveItErrorCode::SUCCESS)
       {
           RCLCPP_INFO(this->get_logger(), "Nullspace motion executed successfully!");
-          /*auto current_pose = move_group_interface_->getCurrentPose("arm_right_7_link");
+          auto current_pose = move_group_interface_->getCurrentPose("arm_right_7_link");
           for (auto waypoint : waypoints){
               waypoint.orientation = current_pose.pose.orientation;
           }
-          return;*/
+          return;
       }
       else
       {
           RCLCPP_ERROR(this->get_logger(), "Nullspace motion execution failed!");
           return;
       }
-
+*/
       //return;
     } else {
       RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
