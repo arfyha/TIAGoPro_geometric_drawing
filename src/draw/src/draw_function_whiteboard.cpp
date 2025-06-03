@@ -191,6 +191,9 @@ private:
         plan.trajectory_ = trajectory;
         move_group_interface_->execute(plan);
 
+        moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+        planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
+
         RCLCPP_INFO(this->get_logger(), "Function drawn successfully.");
     } else {
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
