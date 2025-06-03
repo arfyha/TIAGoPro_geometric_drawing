@@ -124,10 +124,11 @@ private:
         ransac.getModelCoefficients(model_coefficients);
         RCLCPP_INFO(this->get_logger(), "Model coefficients: [%f, %f, %f, %f]", 
             model_coefficients[0], model_coefficients[1], model_coefficients[2], model_coefficients[3]);
-        Eigen::VectorXf optimzed_model_coefficients;
+        /*Eigen::VectorXf optimzed_model_coefficients;
         model_p->optimizeModelCoefficients(inliers, model_coefficients, optimzed_model_coefficients);
         RCLCPP_INFO(this->get_logger(), "Optimized model coefficients: [%f, %f, %f, %f]", 
-            optimzed_model_coefficients[0], optimzed_model_coefficients[1], optimzed_model_coefficients[2], optimzed_model_coefficients[3]);
+            optimzed_model_coefficients[0], optimzed_model_coefficients[1], 
+            optimzed_model_coefficients[2], optimzed_model_coefficients[3]);*/
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZ> extract;
@@ -152,7 +153,7 @@ private:
         chull.setAlpha (0.1);
         chull.reconstruct (*cloud_hull);*/
 
-        computeWhiteboardFeatures(whiteboard_cloud, optimzed_model_coefficients);
+        computeWhiteboardProperties(whiteboard_cloud, model_coefficients);
 
         this->publishPointCloud(plane_pub_, *whiteboard_cloud);
         this->publishPointCloud(plane_seg_pub_, *filtered_out_cloud);
@@ -182,7 +183,7 @@ private:
         return value;
     }
 
-    void computeWhiteboardFeatures(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
+    void computeWhiteboardProperties(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
                                    const Eigen::VectorXf & model_coefficients){
 
         Eigen::Vector3f whiteboard_normal = Eigen::Vector3f(model_coefficients[0], model_coefficients[1], model_coefficients[2]);
@@ -203,11 +204,11 @@ private:
         // Assume the whiteboard's normal is its "up" (Z) direction
         Eigen::Vector3f world_z(0, 0, 1);
 
-        Eigen::Vector3f rotation_axis = world_z.cross(whiteboard_normal);
+        Eigen::Vector3f rotation_axis = (world_z.cross(whiteboard_normal)).normalized();
         RCLCPP_INFO(this->get_logger(), "Rotation axis: [%f, %f, %f]", rotation_axis[0], rotation_axis[1], rotation_axis[2]);
         float rotation_angle = std::acos(world_z.dot(whiteboard_normal) / (world_z.norm() * whiteboard_normal.norm()));
         RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
-        Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis.normalized()));
+        Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis));
         quat = quat.normalized();
 
         Eigen::Vector4f centroid;
