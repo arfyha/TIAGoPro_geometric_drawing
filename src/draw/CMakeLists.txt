@@ -18,6 +18,7 @@ find_package(moveit_core REQUIRED)
 find_package(Eigen3 REQUIRED)
 find_package(std_msgs REQUIRED)
 find_package(control_msgs REQUIRED)
+find_package(geometry_msgs REQUIRED)
 
 add_library(nullspace_explorer_lib src/nullspace_exploration.cpp)
 
@@ -38,6 +39,7 @@ ament_target_dependencies(
   tf2
   tf2_ros 
   tf2_eigen
+  geometry_msgs
 )
 
 add_executable(draw_function_air src/draw_function_air.cpp)

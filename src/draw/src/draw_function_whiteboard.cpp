@@ -17,7 +17,7 @@
 #include <tf2_ros/transform_broadcaster.h>
 #include <tf2_ros/transform_listener.h>
 #include <draw/nullspace_exploration.hpp>
-
+#include <geometry_msgs/msg/twist.hpp>
 
 static const std::string NODE_NAME = "draw_function_whiteboard_node";
 static const std::string PLANNING_GROUP = "arm_right_torso";
@@ -35,6 +35,8 @@ public:
     tf_buffer_   = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     br = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
+
+    cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
   }
 
   void initialize() {
@@ -55,11 +57,13 @@ public:
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
 
-    // Remove all collision objects then add the collision object to the scene
+    // Remove all collision objects from the scene
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
-    planning_scene_interface.applyCollisionObject(createCollisionObject());
 
+    driveForwardCallback();
+
+    planning_scene_interface.applyCollisionObject(createCollisionObject());
     drawFunction();
   }
 
@@ -75,6 +79,8 @@ private:
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> br;
 
+  rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
+
   void drawTitle(const std::string &text) {
     Eigen::Isometry3d text_pose = Eigen::Isometry3d::Identity();
     text_pose.translation().x() = 1.0;
@@ -87,7 +93,7 @@ private:
     for (int i = 0; i < 360; ++i) {
       geometry_msgs::msg::TransformStamped transformStamped;
       try {
-        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(5.0));
+        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(1.0));
       } catch (tf2::TransformException &ex) {
         RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
         return;
@@ -226,6 +232,38 @@ private:
     collision_object.operation = collision_object.ADD;
 
     return collision_object;
+  }
+
+  void driveForwardCallback(){
+    geometry_msgs::msg::TransformStamped transformStamped;
+    try {
+      transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
+    } catch (tf2::TransformException &ex) {
+      RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
+      return;
+    }
+    while (transformStamped.transform.translation.x > 0.85) {
+      RCLCPP_INFO(this->get_logger(), "Driving forward to ensure whiteboard is in range, distance: %.2f", transformStamped.transform.translation.x);
+      geometry_msgs::msg::Twist cmd_vel_msg;
+      if (transformStamped.transform.translation.x < 1.0)
+        cmd_vel_msg.linear.x = 0.05;
+      else
+        cmd_vel_msg.linear.x = 0.1;
+      cmd_vel_msg.angular.z = 0.0;
+      cmd_vel_pub_->publish(cmd_vel_msg);
+
+      try {
+        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
+      } catch (tf2::TransformException &ex) {
+        RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
+        return;
+      }
+    }
+    RCLCPP_INFO(this->get_logger(), "Reached the whiteboard, distance: %.2f", transformStamped.transform.translation.x);
+    geometry_msgs::msg::Twist cmd_vel_msg;
+    cmd_vel_msg.linear.x = 0.0;
+    cmd_vel_msg.angular.z = 0.0;
+    cmd_vel_pub_->publish(cmd_vel_msg);
   }
 };
 
