@@ -15,7 +15,7 @@ def generate_launch_description():
                 'x_filter_max': 3.0,
                 'y_filter_min': -1.2,
                 'y_filter_max': 1.2,
-                'z_filter_min': -0.1,
+                'z_filter_min': 0.1,
                 'z_filter_max': 1.8,
                 'nr_k': 100,
                 'stddev_mult': 0.5,
