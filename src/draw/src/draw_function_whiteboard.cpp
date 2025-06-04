@@ -20,9 +20,10 @@
 #include <geometry_msgs/msg/twist.hpp>
 
 static const std::string NODE_NAME = "draw_function_whiteboard_node";
-static const std::string PLANNING_GROUP = "arm_right_torso";
+static const std::string PLANNING_GROUP = "arm_right";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
+//set head_link to -0.480000
 
 class DrawFunctionWhiteboardNode : public rclcpp::Node {
 public:
@@ -225,11 +226,11 @@ private:
     const auto& t2 = whiteboard_min_pt.transform.translation;
     primitive.dimensions[primitive.BOX_X] = std::abs(t1.x - t2.x); 
     primitive.dimensions[primitive.BOX_Y] = std::abs(t1.y - t2.y);
-    primitive.dimensions[primitive.BOX_Z] = 0.05;
+    primitive.dimensions[primitive.BOX_Z] = 0.06; // Width of the whiteboard plus extra space for the robot to avoid it
 
     // Define the pose of the box (relative to the frame_id)
     geometry_msgs::msg::Pose whiteboard_pose;
-    whiteboard_pose.position.z = -0.025; // Half of the height
+    whiteboard_pose.position.z = 0.0;
     collision_object.primitives.push_back(primitive);
     collision_object.primitive_poses.push_back(whiteboard_pose);
     collision_object.operation = collision_object.ADD;
@@ -240,15 +241,16 @@ private:
   void driveForwardCallback(){
     geometry_msgs::msg::TransformStamped transformStamped;
     try {
-      transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
+      transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "whiteboard_bb_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
     } catch (tf2::TransformException &ex) {
       RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
       return;
     }
-    while (transformStamped.transform.translation.x > 0.85) {
+    double distance_threshold = 0.85;
+    while (transformStamped.transform.translation.x > distance_threshold) {
       RCLCPP_INFO(this->get_logger(), "Driving forward to ensure whiteboard is in range, distance: %.2f", transformStamped.transform.translation.x);
       geometry_msgs::msg::Twist cmd_vel_msg;
-      if (transformStamped.transform.translation.x < 1.0)
+      if (transformStamped.transform.translation.x < distance_threshold + 0.1)
         cmd_vel_msg.linear.x = 0.05;
       else
         cmd_vel_msg.linear.x = 0.1;
@@ -256,7 +258,7 @@ private:
       cmd_vel_pub_->publish(cmd_vel_msg);
 
       try {
-        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
+        transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "whiteboard_bb_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
       } catch (tf2::TransformException &ex) {
         RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
         return;
