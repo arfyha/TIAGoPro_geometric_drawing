@@ -123,7 +123,7 @@ private:
       std::vector<double> point = calculatePointsFunction(i);
       ti.transform.translation.x = -point.at(0);
       ti.transform.translation.y = point.at(1);
-      ti.transform.translation.z = -0.2;
+      ti.transform.translation.z = -0.25;
 
       tf_broadcaster_->sendTransform(ti);
     }
