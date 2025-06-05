@@ -20,10 +20,10 @@
 #include <geometry_msgs/msg/twist.hpp>
 
 static const std::string NODE_NAME = "draw_function_whiteboard_node";
-static const std::string PLANNING_GROUP = "arm_right";
+static const std::string PLANNING_GROUP = "arm_right_torso";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
-//set head_link to -0.480000
+//set head_link to -0.64
 
 class DrawFunctionWhiteboardNode : public rclcpp::Node {
 public:
@@ -50,11 +50,6 @@ public:
     robot_model_ = move_group_interface_->getRobotModel();
     jmg_ = robot_model_->getJointModelGroup(PLANNING_GROUP);
 
-    move_group_interface_->setPlanningTime(30.0);
-    move_group_interface_->setNumPlanningAttempts(100);
-    move_group_interface_->setMaxVelocityScalingFactor(1.0);
-    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
-
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
 
@@ -65,6 +60,15 @@ public:
     driveForwardCallback();
 
     planning_scene_interface.applyCollisionObject(createCollisionObject());
+    while (planning_scene_interface.getObjects(std::vector<std::string>{"whiteboard"}).empty()) {
+      RCLCPP_INFO(this->get_logger(), "Waiting for collision object to be added to the planning scene...");
+      rclcpp::sleep_for(std::chrono::milliseconds(100));
+    }
+    move_group_interface_->setPlanningTime(30.0);
+    move_group_interface_->setNumPlanningAttempts(200);
+    move_group_interface_->setMaxVelocityScalingFactor(0.5);
+    move_group_interface_->setMaxAccelerationScalingFactor(0.5);
+
     drawFunction();
   }
 
@@ -106,9 +110,13 @@ private:
       pose.orientation = transformStamped.transform.rotation;
 
       //auto pose_ = calculatePose(i);
-      
       waypoints.push_back(pose);
     }
+    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
+    RCLCPP_INFO(this->get_logger(),"collsion objects names: %s", planning_scene_interface.getKnownObjectNames().at(0).c_str());
+
+    visual_tools_->publishPath(waypoints, rviz_visual_tools::RED, rviz_visual_tools::XXSMALL);
+    visual_tools_->trigger();
 
     move_group_interface_->setPoseTarget(waypoints.front());
     moveit::planning_interface::MoveGroupInterface::Plan plan;
@@ -163,36 +171,29 @@ private:
 
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0;
-    const double eef_step = 0.001;
+    const double eef_step = 0.0001;
     double fraction = 0.0;
     int attempt = 0;
     int max_attempts = 100;
 
-    while(fraction < 0.9 && attempt < max_attempts) {
+    while(fraction < 0.95 && attempt < max_attempts) {
       move_group_interface_->setStartStateToCurrentState();
-      fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
+      fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory, true);
       RCLCPP_INFO(this->get_logger(), "Computing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
       attempt++;
     }
 
-    if (fraction >= 0.9) {
+    if (fraction >= 0.95) {
         RCLCPP_INFO(this->get_logger(), "Successfully planned Cartesian path with %.2f%% coverage.", fraction * 100.0);
 
-        drawTitle("Plan_Cartesian_Path");
-        visual_tools_->publishPath(waypoints, rviz_visual_tools::LIME_GREEN, rviz_visual_tools::SMALL);
-        for (std::size_t i = 0; i < waypoints.size(); ++i)
-            //visual_tools_->publishAxisLabeled(waypoints[i], "pt" + std::to_string(i), rviz_visual_tools::SMALL);
-            visual_tools_->trigger();
-            //visual_tools_->prompt("Press 'next' in the RvizVisualToolsGui window to continue the demo");
-
-        drawTitle("Execute_Cartesian_Path");
+        //drawTitle("Execute_Cartesian_Path");
+        visual_tools_->publishTrajectoryLine(trajectory, jmg_);
         visual_tools_->trigger();
-
+        return;
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         plan.trajectory_ = trajectory;
         move_group_interface_->execute(plan);
 
-        moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
         planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
 
         RCLCPP_INFO(this->get_logger(), "Function drawn successfully.");
@@ -224,8 +225,8 @@ private:
     primitive.dimensions.resize(3);
     const auto& t1 = whiteboard_max_pt.transform.translation;
     const auto& t2 = whiteboard_min_pt.transform.translation;
-    primitive.dimensions[primitive.BOX_X] = std::abs(t1.x - t2.x); 
-    primitive.dimensions[primitive.BOX_Y] = std::abs(t1.y - t2.y);
+    primitive.dimensions[primitive.BOX_X] = std::abs(t1.x - t2.x) + 0.02; 
+    primitive.dimensions[primitive.BOX_Y] = std::abs(t1.y - t2.y) + 0.02;
     primitive.dimensions[primitive.BOX_Z] = 0.06; // Width of the whiteboard plus extra space for the robot to avoid it
 
     // Define the pose of the box (relative to the frame_id)
@@ -246,7 +247,7 @@ private:
       RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
       return;
     }
-    double distance_threshold = 0.85;
+    double distance_threshold = 0.7;
     while (transformStamped.transform.translation.x > distance_threshold) {
       RCLCPP_INFO(this->get_logger(), "Driving forward to ensure whiteboard is in range, distance: %.2f", transformStamped.transform.translation.x);
       geometry_msgs::msg::Twist cmd_vel_msg;
