@@ -50,14 +50,15 @@ public:
     robot_model_ = move_group_interface_->getRobotModel();
     jmg_ = robot_model_->getJointModelGroup(PLANNING_GROUP);
 
-    visual_tools_->deleteAllMarkers();
-    visual_tools_->loadRemoteControl();
-
     // Remove all collision objects from the scene
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
+    visual_tools_->deleteAllMarkers();
+    visual_tools_->loadRemoteControl();
+    visual_tools_->trigger();
 
     driveForwardCallback();
+    rclcpp::sleep_for(std::chrono::seconds(1)); // Wait for the robot to stop moving and point cloud setteling
 
     planning_scene_interface.applyCollisionObject(createCollisionObject());
     while (planning_scene_interface.getObjects(std::vector<std::string>{"whiteboard"}).empty()) {
@@ -111,12 +112,12 @@ private:
 
       //auto pose_ = calculatePose(i);
       waypoints.push_back(pose);
+      visual_tools_->publishSphere(pose, rviz_visual_tools::RED, rviz_visual_tools::XXXXSMALL);
     }
+    visual_tools_->trigger();
+    //return;
     moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     RCLCPP_INFO(this->get_logger(),"collsion objects names: %s", planning_scene_interface.getKnownObjectNames().at(0).c_str());
-
-    visual_tools_->publishPath(waypoints, rviz_visual_tools::RED, rviz_visual_tools::XXSMALL);
-    visual_tools_->trigger();
 
     move_group_interface_->setPoseTarget(waypoints.front());
     moveit::planning_interface::MoveGroupInterface::Plan plan;

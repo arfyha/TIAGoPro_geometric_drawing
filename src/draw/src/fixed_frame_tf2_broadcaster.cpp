@@ -151,7 +151,7 @@ private:
   // Returns a 2D array (vector of vectors) holding the coordinates of a rectangle with side length 0.1
   // The rectangle is represented by num_points_ points, distributed evenly along its perimeter
   std::vector<std::vector<double>> getRectangleCoordinates() {
-    double side = 0.1;
+    double side = 0.2;
     double half = side / 2.0;
     std::vector<std::vector<double>> rect_points;
     double perimeter = 4 * side;
