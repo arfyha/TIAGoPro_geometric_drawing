@@ -120,7 +120,7 @@ private:
       ti.header.stamp = this->get_clock()->now();
       ti.header.frame_id = "function_center";
       ti.child_frame_id = "function_point_" + std::to_string(i);
-      std::vector<double> point = calculatePointsFunction(i);
+      std::vector<double> point = getRectangleCoordinates().at(i);
       ti.transform.translation.x = -point.at(0);
       ti.transform.translation.y = point.at(1);
       ti.transform.translation.z = -0.25;
@@ -146,6 +146,36 @@ private:
 
   double degToRad(double degrees) {
     return degrees * M_PI / 180.0;
+  }
+
+  // Returns a 2D array (vector of vectors) holding the coordinates of a rectangle with side length 0.1
+  // The rectangle is represented by num_points_ points, distributed evenly along its perimeter
+  std::vector<std::vector<double>> getRectangleCoordinates() {
+    double side = 0.1;
+    double half = side / 2.0;
+    std::vector<std::vector<double>> rect_points;
+    double perimeter = 4 * side;
+    double step = perimeter / num_points_;
+
+    for (int i = 0; i < num_points_; ++i) {
+      double dist = i * step;
+      double x, y;
+      if (dist < side) { // bottom edge: left to right
+        x = -half + dist;
+        y = -half;
+      } else if (dist < 2 * side) { // right edge: bottom to top
+        x = half;
+        y = -half + (dist - side);
+      } else if (dist < 3 * side) { // top edge: right to left
+        x = half - (dist - 2 * side);
+        y = half;
+      } else { // left edge: top to bottom
+        x = -half;
+        y = half - (dist - 3 * side);
+      }
+      rect_points.push_back({x, y});
+    }
+    return rect_points;
   }
 };
 
