@@ -193,7 +193,7 @@ private:
         }
         
         // If the whiteboard is horizontal, ensure avg_normal points upwards (near (0,0,1))
-        if (std::abs(whiteboard_normal[0]) < 0.3 && std::abs(whiteboard_normal[1]) < 0.3) {
+        if (std::abs(whiteboard_normal[0]) < 0.52 && std::abs(whiteboard_normal[1]) < 0.3) {
             // Normal is close to vertical, check direction
             if (whiteboard_normal[2] < 0) {
             whiteboard_normal = -whiteboard_normal;
