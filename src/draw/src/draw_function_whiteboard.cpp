@@ -20,7 +20,7 @@
 #include <geometry_msgs/msg/twist.hpp>
 
 static const std::string NODE_NAME = "draw_function_whiteboard_node";
-static const std::string PLANNING_GROUP = "arm_right_torso";
+static const std::string PLANNING_GROUP = "arm_right";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
 //set head_link to -0.64
@@ -51,7 +51,6 @@ public:
     jmg_ = robot_model_->getJointModelGroup(PLANNING_GROUP);
 
     // Remove all collision objects from the scene
-    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
@@ -60,15 +59,13 @@ public:
     driveForwardCallback();
     rclcpp::sleep_for(std::chrono::seconds(1)); // Wait for the robot to stop moving and point cloud setteling
 
+    move_group_interface_->setPlannerId("RRTConnectkConfigDefault");
     planning_scene_interface.applyCollisionObject(createCollisionObject());
-    while (planning_scene_interface.getObjects(std::vector<std::string>{"whiteboard"}).empty()) {
-      RCLCPP_INFO(this->get_logger(), "Waiting for collision object to be added to the planning scene...");
-      rclcpp::sleep_for(std::chrono::milliseconds(100));
-    }
+    
     move_group_interface_->setPlanningTime(30.0);
     move_group_interface_->setNumPlanningAttempts(200);
-    move_group_interface_->setMaxVelocityScalingFactor(0.5);
-    move_group_interface_->setMaxAccelerationScalingFactor(0.5);
+    move_group_interface_->setMaxVelocityScalingFactor(1.0);
+    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
 
     drawFunction();
   }
@@ -76,6 +73,7 @@ public:
 private:
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_interface_;
   std::shared_ptr<moveit_visual_tools::MoveItVisualTools> visual_tools_;
+  moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
   
   std::shared_ptr<NullspaceExplorationNode> nullspace_explorer_;
   moveit::core::RobotModelConstPtr robot_model_;
@@ -112,56 +110,18 @@ private:
 
       //auto pose_ = calculatePose(i);
       waypoints.push_back(pose);
-      visual_tools_->publishSphere(pose, rviz_visual_tools::RED, rviz_visual_tools::XXXXSMALL);
+      visual_tools_->publishSphere(pose, rviz_visual_tools::RED, rviz_visual_tools::SMALL);
     }
     visual_tools_->trigger();
     //return;
-    moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
-    RCLCPP_INFO(this->get_logger(),"collsion objects names: %s", planning_scene_interface.getKnownObjectNames().at(0).c_str());
 
     move_group_interface_->setPoseTarget(waypoints.front());
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     auto success = move_group_interface_->plan(plan);
     if (success == moveit::core::MoveItErrorCode::SUCCESS) {
       move_group_interface_->execute(plan);
+      //nullspaceExploration(plan);
       RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
-/*
-      //Nullspace exploration
-      move_group_interface_->clearPoseTargets();
-      std::vector<double> planned_joint_values = plan.trajectory_.joint_trajectory.points.back().positions;
-      moveit::core::RobotState end_state(robot_model_);
-      end_state.setJointGroupPositions(jmg_, planned_joint_values);
-      end_state.update();
-      std::vector<double> best_joint_values = nullspace_explorer_->explore(end_state);
-      move_group_interface_->setJointValueTarget(best_joint_values);
-      
-      // Plan the trajectory
-      moveit::planning_interface::MoveGroupInterface::Plan plan_joints;
-      bool success = (move_group_interface_->plan(plan_joints) == moveit::core::MoveItErrorCode::SUCCESS);
-      
-      if (!success)
-      {
-          RCLCPP_ERROR(this->get_logger(), "Failed to plan trajectory!");
-          return;
-      }
-
-      // Execute the planned trajectory
-      moveit::core::MoveItErrorCode result = move_group_interface_->execute(plan);
-      if (result == moveit::core::MoveItErrorCode::SUCCESS)
-      {
-          RCLCPP_INFO(this->get_logger(), "Nullspace motion executed successfully!");
-          auto current_pose = move_group_interface_->getCurrentPose("arm_right_7_link");
-          for (auto waypoint : waypoints){
-              waypoint.orientation = current_pose.pose.orientation;
-          }
-          return;
-      }
-      else
-      {
-          RCLCPP_ERROR(this->get_logger(), "Nullspace motion execution failed!");
-          return;
-      }
-*/
       //return;
     } else {
       RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
@@ -170,27 +130,43 @@ private:
 
     //waypoints.push_back(waypoints.front());
 
+    for(auto &waypoint : waypoints) {
+      move_group_interface_->setPoseTarget(waypoint);
+      moveit::planning_interface::MoveGroupInterface::Plan plan;
+      auto success = move_group_interface_->plan(plan);
+      if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+        move_group_interface_->execute(plan);
+        //nullspaceExploration(plan);
+        RCLCPP_INFO(this->get_logger(), "pose set successfully.");
+      } else {
+        RCLCPP_ERROR(this->get_logger(), "Failed to set pose.");
+        return;
+      }
+    }
+    return;
+
     moveit_msgs::msg::RobotTrajectory trajectory;
-    const double jump_threshold = 0.0;
-    const double eef_step = 0.0001;
+    const double jump_threshold = 1000.0;
+    const double eef_step = 1e-4;
     double fraction = 0.0;
     int attempt = 0;
-    int max_attempts = 100;
+    int max_attempts = 10;
+    const double path_coverage = 0.85;
 
-    while(fraction < 0.95 && attempt < max_attempts) {
+    while(fraction < path_coverage && attempt < max_attempts) {
       move_group_interface_->setStartStateToCurrentState();
       fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory, true);
       RCLCPP_INFO(this->get_logger(), "Computing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
       attempt++;
     }
 
-    if (fraction >= 0.95) {
+    if (fraction >= path_coverage) {
         RCLCPP_INFO(this->get_logger(), "Successfully planned Cartesian path with %.2f%% coverage.", fraction * 100.0);
 
         //drawTitle("Execute_Cartesian_Path");
         visual_tools_->publishTrajectoryLine(trajectory, jmg_);
         visual_tools_->trigger();
-        return;
+        //return;
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         plan.trajectory_ = trajectory;
         move_group_interface_->execute(plan);
@@ -208,7 +184,7 @@ private:
   moveit_msgs::msg::CollisionObject createCollisionObject(){
     moveit_msgs::msg::CollisionObject collision_object;
     collision_object.header.frame_id = "whiteboard_bb_center";
-    collision_object.header.stamp = this->now();
+    collision_object.header.stamp = this->get_clock()->now();
     collision_object.id = "whiteboard";
     shape_msgs::msg::SolidPrimitive primitive;
     geometry_msgs::msg::TransformStamped whiteboard_min_pt;
@@ -228,11 +204,11 @@ private:
     const auto& t2 = whiteboard_min_pt.transform.translation;
     primitive.dimensions[primitive.BOX_X] = std::abs(t1.x - t2.x) + 0.02; 
     primitive.dimensions[primitive.BOX_Y] = std::abs(t1.y - t2.y) + 0.02;
-    primitive.dimensions[primitive.BOX_Z] = 0.06; // Width of the whiteboard plus extra space for the robot to avoid it
+    primitive.dimensions[primitive.BOX_Z] = 0.07; // Width of the whiteboard plus extra space for the robot to avoid it
 
     // Define the pose of the box (relative to the frame_id)
     geometry_msgs::msg::Pose whiteboard_pose;
-    whiteboard_pose.position.z = 0.0;
+    whiteboard_pose.position.z = -0.03;
     collision_object.primitives.push_back(primitive);
     collision_object.primitive_poses.push_back(whiteboard_pose);
     collision_object.operation = collision_object.ADD;
@@ -271,6 +247,39 @@ private:
     cmd_vel_msg.linear.x = 0.0;
     cmd_vel_msg.angular.z = 0.0;
     cmd_vel_pub_->publish(cmd_vel_msg);
+  }
+
+  void nullspaceExploration(moveit::planning_interface::MoveGroupInterface::Plan plan){
+      //Nullspace exploration
+      move_group_interface_->clearPoseTargets();
+      std::vector<double> planned_joint_values = plan.trajectory_.joint_trajectory.points.back().positions;
+      moveit::core::RobotState end_state(robot_model_);
+      end_state.setJointGroupPositions(jmg_, planned_joint_values);
+      end_state.update();
+      std::vector<double> best_joint_values = nullspace_explorer_->explore(end_state);
+      move_group_interface_->setJointValueTarget(best_joint_values);
+      
+      // Plan the trajectory
+      moveit::planning_interface::MoveGroupInterface::Plan plan_joints;
+      bool success = (move_group_interface_->plan(plan_joints) == moveit::core::MoveItErrorCode::SUCCESS);
+      
+      if (!success)
+      {
+          RCLCPP_ERROR(this->get_logger(), "Failed to plan trajectory!");
+          return;
+      }
+
+      // Execute the planned trajectory
+      moveit::core::MoveItErrorCode result = move_group_interface_->execute(plan);
+      if (result == moveit::core::MoveItErrorCode::SUCCESS)
+      {
+          RCLCPP_INFO(this->get_logger(), "Nullspace motion executed successfully!");
+      }
+      else
+      {
+          RCLCPP_ERROR(this->get_logger(), "Nullspace motion execution failed!");
+          return;
+      }
   }
 };
 
