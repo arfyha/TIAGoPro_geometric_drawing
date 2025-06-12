@@ -4,7 +4,7 @@ from ament_index_python import get_package_share_directory
 from ament_index_python.packages import get_package_prefix
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, SetLaunchConfiguration
+from launch.actions import DeclareLaunchArgument, SetEnvironmentVariable, SetLaunchConfiguration, TimerAction, ExecuteProcess
 
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PythonExpression
@@ -78,6 +78,18 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
             output='screen'
     )
     launch_description.add_action(whiteboard)
+
+    # Delay head_down node by 30 seconds
+    head_down = TimerAction(
+        period=30.0,
+        actions=[
+             ExecuteProcess(
+                cmd=['ros2', 'run', 'play_motion2', 'run_motion', 'head_down', 'false', '120'],
+                output='screen'
+        )
+        ]
+    )
+    launch_description.add_action(head_down)
 
     return
 
