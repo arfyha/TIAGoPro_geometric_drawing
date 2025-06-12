@@ -130,24 +130,9 @@ private:
 
     //waypoints.push_back(waypoints.front());
 
-    for(auto &waypoint : waypoints) {
-      move_group_interface_->setPoseTarget(waypoint);
-      moveit::planning_interface::MoveGroupInterface::Plan plan;
-      auto success = move_group_interface_->plan(plan);
-      if (success == moveit::core::MoveItErrorCode::SUCCESS) {
-        move_group_interface_->execute(plan);
-        //nullspaceExploration(plan);
-        RCLCPP_INFO(this->get_logger(), "pose set successfully.");
-      } else {
-        RCLCPP_ERROR(this->get_logger(), "Failed to set pose.");
-        return;
-      }
-    }
-    return;
-
     moveit_msgs::msg::RobotTrajectory trajectory;
-    const double jump_threshold = 1000.0;
-    const double eef_step = 1e-4;
+    const double jump_threshold = 100.0;
+    const double eef_step = 1e-3;
     double fraction = 0.0;
     int attempt = 0;
     int max_attempts = 10;
