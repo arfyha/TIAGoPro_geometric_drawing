@@ -42,7 +42,7 @@ def declare_actions(launch_description: LaunchDescription, launch_args: LaunchAr
             'slam': launch_args.slam,
             'docking': launch_args.docking,
             'moveit': launch_args.moveit,
-            'world_name': "empty"
+            'world_name': "small_office"
             ,
             'tuck_arm': launch_args.tuck_arm,
             'is_public_sim': launch_args.is_public_sim
