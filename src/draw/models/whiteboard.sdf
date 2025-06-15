@@ -6,12 +6,12 @@
 
         <!-- Vertical Poles-->
         <link name="stand_pole_left">
-        <pose>-0.5 0 1 0 0 0</pose>
+        <pose>-0.5 0 0.625 0 0 0</pose>
         <visual name="stand_pole_left_visual">
             <geometry>
             <cylinder>
                 <radius>0.05</radius>
-                <length>2</length>
+                <length>1.25</length>
             </cylinder>
             </geometry>
             <material>
@@ -21,12 +21,12 @@
         </link>
         
         <link name="stand_pole_right">
-        <pose>0.5 0 1 0 0 0</pose>
+        <pose>0.5 0 0.625 0 0 0</pose>
         <visual name="stand_pole_right_visual">
             <geometry>
             <cylinder>
                 <radius>0.05</radius>
-                <length>2</length>
+                <length>1.25</length>
             </cylinder>
             </geometry>
             <material>
