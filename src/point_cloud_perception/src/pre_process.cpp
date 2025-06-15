@@ -35,29 +35,26 @@ public:
 
         voxel_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/voxel_filtered_cloud", 10);
         crop_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/crop_filtered_cloud", 10);
-        sor_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/sor_filtered_cloud", 10);
         pre_process_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/pre_process_filtered_cloud", 10);
+        org_cloud_oub = this->create_publisher<sensor_msgs::msg::PointCloud2>("/original_cloud", 10);
+        trans_cloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>("/transformed_cloud", 10);
 
         /*
          * SET UP PARAMETERS
          */
-        rclcpp::Parameter cloud_topic_param, world_frame_param, voxel_leaf_size_param, 
-            x_filter_min_param, x_filter_max_param, y_filter_min_param, y_filter_max_param,
-            z_filter_min_param, z_filter_max_param, nr_k_param, stddev_mult_param;
-
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
         cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/head_front_camera/depth/color/points");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
         voxel_leaf_size = float(this->get_or_create_parameter<double>("voxel_leaf_size", 0.01));
         x_filter_min = this->get_or_create_parameter<double>("x_filter_min", -0.7);
-        x_filter_max = this->get_or_create_parameter<double>("x_filter_max", 2.0);
+        x_filter_max = this->get_or_create_parameter<double>("x_filter_max", 3.0);
         y_filter_min = this->get_or_create_parameter<double>("y_filter_min", -1.2);
         y_filter_max = this->get_or_create_parameter<double>("y_filter_max", -1.2);
         z_filter_min = this->get_or_create_parameter<double>("z_filter_min", 0.1);
         z_filter_max = this->get_or_create_parameter<double>("z_filter_max", 1.8);
-        nr_k = this->get_or_create_parameter<int>("nr_k", 100);
-        stddev_mult = this->get_or_create_parameter<double>("stddev_mult", 0.5);
+        nr_k = this->get_or_create_parameter<int>("nr_k", 50);
+        stddev_mult = this->get_or_create_parameter<double>("stddev_mult", 1.0);
 
         /*
          * SET UP SUBSCRIBER
@@ -93,8 +90,10 @@ private:
     rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr point_cloud_sub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr voxel_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr crop_pub_;
-    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr sor_pub_;
     rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pre_process_pub_;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr org_cloud_oub;
+    rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr trans_cloud_pub_;
+
 
     /*
      * Parameters
@@ -118,9 +117,13 @@ private:
 
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
+        // Publishing orginal cloud with differnt header (just for visualization)
+        pcl::PointCloud<pcl::PointXYZ>::Ptr org_cloud(new pcl::PointCloud<pcl::PointXYZ>());
+        pcl::fromROSMsg(*point_cloud_msg, *org_cloud);
+        this->publishPointCloud(org_cloud_oub, *org_cloud);
+        //RCLCPP_INFO(this->get_logger(), "Received point cloud with %zu points", org_cloud->size());
 
-        cloud_topic = this->get_parameter("cloud_topic").get_parameter_value().get<std::string>();
-        world_frame = this->get_parameter("world_frame").get_parameter_value().get<std::string>();
+        // Get parameters
         voxel_leaf_size = float(this->get_parameter("voxel_leaf_size").get_parameter_value().get<double>());
         x_filter_min = this->get_parameter("x_filter_min").get_parameter_value().get<double>();
         x_filter_max = this->get_parameter("x_filter_max").get_parameter_value().get<double>();
@@ -148,24 +151,23 @@ private:
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(transformed_cloud, *cloud);
-        RCLCPP_INFO(this->get_logger(), "Received point cloud with %zu points", cloud->size());
+        //RCLCPP_INFO(this->get_logger(), "Transformed point cloud with %zu points", cloud->size());
+        this->publishPointCloud(trans_cloud_pub_, *cloud);
         
         // Publish voxel filtered cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_cloud = voxel_filter(cloud);
         this->publishPointCloud(voxel_pub_, *voxel_cloud);
+        //RCLCPP_INFO(this->get_logger(), "Voxel filtered point cloud with %zu points", voxel_cloud->size());
 
         // Publish crop filtered cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr crop_cloud = crop_box_filter(voxel_cloud);
         this->publishPointCloud(crop_pub_, *crop_cloud);
-
-        // Publish SOR filtered cloud
-        //pcl::PointCloud<pcl::PointXYZ>::Ptr sor_cloud = sor_filter(crop_cloud);
-        //this->publishPointCloud(sor_pub_, *sor_cloud);
+        //RCLCPP_INFO(this->get_logger(), "Cropped point cloud with %zu points", crop_cloud->size());
 
         // Publish pre-processed cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = sor_filter(crop_box_filter(voxel_filter(cloud)));
         this->publishPointCloud(pre_process_pub_, *pre_processed_cloud);
-        RCLCPP_INFO(this->get_logger(), "Pre-processed point cloud with %zu points", pre_processed_cloud->size());
+        //RCLCPP_INFO(this->get_logger(), "Pre-processed point cloud with %zu points", pre_processed_cloud->size());
     }
 
     pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_filter(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud){
