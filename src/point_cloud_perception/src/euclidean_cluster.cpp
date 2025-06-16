@@ -48,8 +48,8 @@ public:
 
         cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/voxel_filtered_cloud");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
-        cluster_tolerance = this->get_or_create_parameter<double>("cluster_tolerance", 0.05);
-        min_cluster_dev = this->get_or_create_parameter<double>("min_cluster_dev", 10.0);
+        cluster_tolerance = this->get_or_create_parameter<double>("cluster_tolerance", 0.2);
+        min_cluster_dev = this->get_or_create_parameter<double>("min_cluster_dev", 3.0);
         index = size_t(this->get_or_create_parameter<int>("index", 0));
 
         /*
@@ -100,6 +100,8 @@ private:
             min_cluster_dev = 10.0; // Reset to default value
         }
 
+        //RCLCPP_INFO(this->get_logger(), "maximum distance threshold: %f m, divisor: %f", cluster_tolerance, min_cluster_dev);
+
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(*point_cloud_msg, *cloud);
@@ -111,8 +113,11 @@ private:
         std::vector<pcl::PointIndices> cluster_indices;
         pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
         ec.setClusterTolerance (cluster_tolerance);
-        ec.setMinClusterSize (cloud->points.size() / min_cluster_dev);
-        ec.setMaxClusterSize (cloud->points.size());
+        pcl::uindex_t min_cluster_size = cloud->points.size() / min_cluster_dev;
+        pcl::uindex_t max_cluster_size = cloud->points.size();
+        //RCLCPP_INFO(this->get_logger(), "min_cluster_size: %d, max_cluster_size: %d", min_cluster_size, max_cluster_size);
+        ec.setMinClusterSize (min_cluster_size);
+        ec.setMaxClusterSize (max_cluster_size);
         ec.setSearchMethod (tree);
         ec.setInputCloud (cloud);
         ec.extract (cluster_indices);
@@ -141,9 +146,9 @@ private:
             }
             i++;
         }
-        RCLCPP_INFO(this->get_logger(), "Number clusters '%lu', whiteboard index '%d'", clusters.size(), whiteboard_index);        if (clusters.empty()) return;
+        //RCLCPP_INFO(this->get_logger(), "Number clusters '%lu', whiteboard index '%d'", clusters.size(), whiteboard_index);        if (clusters.empty()) return;
         for (size_t i = 0; i < clusters.size(); ++i) {
-            RCLCPP_INFO(this->get_logger(), "Cluster %zu has '%lu' points", i, clusters.at(i)->points.size());
+            //RCLCPP_INFO(this->get_logger(), "Cluster %zu has '%lu' points", i, clusters.at(i)->points.size());
         }
         this->publishPointCloud(euclidean_cluster_pub_, *clusters.at(index));
         if (whiteboard_index > -1) this->publishPointCloud(whiteboard_cluster_pub_, *clusters.at(whiteboard_index));
