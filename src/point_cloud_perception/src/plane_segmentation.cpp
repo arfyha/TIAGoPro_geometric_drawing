@@ -59,7 +59,7 @@ public:
          */
         RCLCPP_INFO(this->get_logger(), "Getting parameters");
 
-        cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/pre_process_filtered_cloud");
+        cloud_topic = this->get_or_create_parameter<std::string>("cloud_topic", "/whiteboard_cluster_cloud");
         world_frame = this->get_or_create_parameter<std::string>("world_frame", "base_footprint");
         threshold = this->get_or_create_parameter<double>("threshold", 0.004);
 
@@ -107,6 +107,8 @@ private:
     {
         threshold = this->get_parameter("threshold").get_parameter_value().get<double>();
 
+        RCLCPP_INFO(this->get_logger(), "Threshold for plane segmentation: %f", threshold);
+
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(*point_cloud_msg, *cloud);
@@ -122,13 +124,16 @@ private:
         ransac.getInliers(inliers);
         Eigen::VectorXf model_coefficients;
         ransac.getModelCoefficients(model_coefficients);
-        RCLCPP_INFO(this->get_logger(), "Model coefficients: [%f, %f, %f, %f]", 
-            model_coefficients[0], model_coefficients[1], model_coefficients[2], model_coefficients[3]);
         /*Eigen::VectorXf optimzed_model_coefficients;
         model_p->optimizeModelCoefficients(inliers, model_coefficients, optimzed_model_coefficients);
         RCLCPP_INFO(this->get_logger(), "Optimized model coefficients: [%f, %f, %f, %f]", 
             optimzed_model_coefficients[0], optimzed_model_coefficients[1], 
             optimzed_model_coefficients[2], optimzed_model_coefficients[3]);*/
+
+        RCLCPP_INFO(this->get_logger(), "Whiteboard cluster has %lu points.", cloud->points.size());
+        RCLCPP_INFO(this->get_logger(), "Number of inliers: %lu", inliers.size());
+        RCLCPP_INFO(this->get_logger(), "Model coefficients: [%f, %f, %f, %f]", model_coefficients[0], model_coefficients[1], model_coefficients[2], model_coefficients[3]);
+        
 
         // Extract the planar inliers from the input cloud
         pcl::ExtractIndices<pcl::PointXYZ> extract;
@@ -140,7 +145,7 @@ private:
 
         // Get the points associated with the planar surface
         extract.filter (*whiteboard_cloud);
-        RCLCPP_INFO(this->get_logger(), "PointCloud2 representing the planar component: '%lu' data points.", whiteboard_cloud->points.size());
+        //RCLCPP_INFO(this->get_logger(), "PointCloud2 representing the planar component: '%lu' data points.", whiteboard_cloud->points.size());
         
         // Remove the planar inliers, extract the rest
         extract.setNegative (true);
@@ -193,31 +198,51 @@ private:
         }
         
         // If the whiteboard is horizontal, ensure avg_normal points upwards (near (0,0,1))
-        if (std::abs(whiteboard_normal[0]) < 0.52 && std::abs(whiteboard_normal[1]) < 0.3) {
+        if (std::abs(whiteboard_normal[0]) < (M_PI / 9) && std::abs(whiteboard_normal[1]) < 0.1) {
             // Normal is close to vertical, check direction
             if (whiteboard_normal[2] < 0) {
             whiteboard_normal = -whiteboard_normal;
             }
         }
-        RCLCPP_INFO(this->get_logger(), "Average normal: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
+        
 
         // Assume the whiteboard's normal is its "up" (Z) direction
         Eigen::Vector3f world_z(0, 0, 1);
 
         Eigen::Vector3f rotation_axis = (world_z.cross(whiteboard_normal)).normalized();
-        RCLCPP_INFO(this->get_logger(), "Rotation axis: [%f, %f, %f]", rotation_axis[0], rotation_axis[1], rotation_axis[2]);
         float rotation_angle = std::acos(world_z.dot(whiteboard_normal) / (world_z.norm() * whiteboard_normal.norm()));
-        RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
         Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis));
         quat = quat.normalized();
+
+        RCLCPP_INFO(this->get_logger(), "Whiteboard normal after normalization: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
+        RCLCPP_INFO(this->get_logger(), "Rotation axis: [%f, %f, %f]", rotation_axis[0], rotation_axis[1], rotation_axis[2]);
+        RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
+        RCLCPP_INFO(this->get_logger(), "Quaternion: [%f, %f, %f, %f]", quat.w(), quat.x(), quat.y(), quat.z());
 
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*cloud, centroid);
 
+        RCLCPP_INFO(this->get_logger(), "Whiteboard centroid: [%f, %f, %f]", centroid[0], centroid[1], centroid[2]);
+
         Eigen::Vector4f min_pt, max_pt;
+        // Create a transform for the base to whiteboard frame
+        Eigen::Matrix3f rotation_matrix = quat.toRotationMatrix();
+        Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
+        transform.block<3,3>(0,0) = rotation_matrix.transpose(); // Inverse rotation
+        transform.block<3,1>(0,3) = -rotation_matrix.transpose() * centroid.head<3>(); // Inverse translation
+        pcl::PointCloud<pcl::PointXYZ>::Ptr aligned_cloud(new pcl::PointCloud<pcl::PointXYZ>);
+        pcl::transformPointCloud(*cloud, *aligned_cloud, transform);
+        Eigen::Vector4f min_pt_whiteboard, max_pt_whiteboard;
+        pcl::getMinMax3D(*aligned_cloud, min_pt_whiteboard, max_pt_whiteboard);
+        min_pt = transform.inverse() * min_pt_whiteboard;
+        max_pt = transform.inverse() * max_pt_whiteboard;
+
         Eigen::Vector3f center;
-        pcl::getMinMax3D(*cloud, min_pt, max_pt);
         center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
+
+        RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box min: [%f, %f, %f]", min_pt[0], min_pt[1], min_pt[2]);
+        RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box max: [%f, %f, %f]", max_pt[0], max_pt[1], max_pt[2]);
+        RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box center: [%f, %f, %f]", center[0], center[1], center[2]);
 
         geometry_msgs::msg::PoseArray pose_array;
         pose_array.header.stamp = this->get_clock()->now();
