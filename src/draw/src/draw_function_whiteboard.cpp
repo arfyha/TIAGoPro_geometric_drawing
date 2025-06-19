@@ -42,30 +42,38 @@ public:
 
   void initialize() {
     move_group_interface_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(shared_from_this(), PLANNING_GROUP);
+    move_group_interface_->setPlannerId("RRTConnectkConfigDefault");
+    move_group_interface_->setPoseReferenceFrame(BASE_FRAME);
+    move_group_interface_->setEndEffectorLink(END_EFFECTOR_LINK);
+    move_group_interface_->setPlanningTime(30.0);
+    move_group_interface_->setNumPlanningAttempts(200);
+    move_group_interface_->setMaxVelocityScalingFactor(1.0);
+    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
+
     visual_tools_ = std::make_shared<moveit_visual_tools::MoveItVisualTools>(
       shared_from_this(), BASE_FRAME, rviz_visual_tools::RVIZ_MARKER_TOPIC,
       move_group_interface_->getRobotModel()
     );
+
+    visual_tools_->deleteAllMarkers();
+    visual_tools_->loadRemoteControl();
+    visual_tools_->setBaseFrame(move_group_interface_->getPlanningFrame());
+    visual_tools_->loadMarkerPub(true);
+    visual_tools_->trigger();
+
     nullspace_explorer_ = std::make_shared<NullspaceExplorationNode>();
     robot_model_ = move_group_interface_->getRobotModel();
     jmg_ = robot_model_->getJointModelGroup(PLANNING_GROUP);
 
     // Remove all collision objects from the scene
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
-    visual_tools_->deleteAllMarkers();
-    visual_tools_->loadRemoteControl();
-    visual_tools_->trigger();
 
     driveForwardCallback();
-    rclcpp::sleep_for(std::chrono::seconds(1)); // Wait for the robot to stop moving and point cloud setteling
+    rclcpp::sleep_for(std::chrono::seconds(10)); // Wait for the robot to stop moving and point cloud setteling
 
-    move_group_interface_->setPlannerId("RRTConnectkConfigDefault");
     planning_scene_interface.applyCollisionObject(createCollisionObject());
-    
-    move_group_interface_->setPlanningTime(30.0);
-    move_group_interface_->setNumPlanningAttempts(200);
-    move_group_interface_->setMaxVelocityScalingFactor(1.0);
-    move_group_interface_->setMaxAccelerationScalingFactor(1.0);
+
+    rclcpp::sleep_for(std::chrono::seconds(10));
 
     drawFunction();
   }
@@ -94,7 +102,7 @@ private:
 
   void drawFunction() {
     std::vector<geometry_msgs::msg::Pose> waypoints;
-    for (int i = 0; i < 360; ++i) {
+    for (int i = 0; i < 100; ++i) {
       geometry_msgs::msg::TransformStamped transformStamped;
       try {
         transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "function_point_" + std::to_string(i), tf2::TimePointZero, tf2::durationFromSec(1.0));
@@ -113,34 +121,39 @@ private:
       visual_tools_->publishSphere(pose, rviz_visual_tools::RED, rviz_visual_tools::SMALL);
     }
     visual_tools_->trigger();
+    rclcpp::sleep_for(std::chrono::seconds(10));
     //return;
 
     move_group_interface_->setPoseTarget(waypoints.front());
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     auto success = move_group_interface_->plan(plan);
-    if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+    if (success == moveit::core::MoveItErrorCode::SUCCESS) { 
+      visual_tools_->publishTrajectoryLine(plan.trajectory_, jmg_, rviz_visual_tools::GREEN);
+      visual_tools_->trigger();
       move_group_interface_->execute(plan);
       //nullspaceExploration(plan);
       RCLCPP_INFO(this->get_logger(), "Initial pose set successfully.");
       //return;
     } else {
       RCLCPP_ERROR(this->get_logger(), "Failed to set initial pose.");
+      planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
       return;
     }
 
     //waypoints.push_back(waypoints.front());
+    rclcpp::sleep_for(std::chrono::seconds(10));
 
     moveit_msgs::msg::RobotTrajectory trajectory;
-    const double jump_threshold = 100.0;
+    const double jump_threshold = 1000;
     const double eef_step = 1e-3;
     double fraction = 0.0;
     int attempt = 0;
-    int max_attempts = 10;
-    const double path_coverage = 0.85;
+    int max_attempts = 100;
+    const double path_coverage = 0.7;
 
     while(fraction < path_coverage && attempt < max_attempts) {
       move_group_interface_->setStartStateToCurrentState();
-      fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory, true);
+      fraction = move_group_interface_->computeCartesianPath(waypoints, eef_step, jump_threshold, trajectory);
       RCLCPP_INFO(this->get_logger(), "Computing plan %i (%.2f%% achieved)", attempt, fraction * 100.0);
       attempt++;
     }
@@ -149,20 +162,20 @@ private:
         RCLCPP_INFO(this->get_logger(), "Successfully planned Cartesian path with %.2f%% coverage.", fraction * 100.0);
 
         //drawTitle("Execute_Cartesian_Path");
-        visual_tools_->publishTrajectoryLine(trajectory, jmg_);
+        visual_tools_->publishTrajectoryLine(trajectory, jmg_, rviz_visual_tools::BLUE);
         visual_tools_->trigger();
         //return;
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         plan.trajectory_ = trajectory;
         move_group_interface_->execute(plan);
 
-        planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
-
         RCLCPP_INFO(this->get_logger(), "Function drawn successfully.");
     } else {
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
     }
-
+    rclcpp::sleep_for(std::chrono::seconds(10));
+    planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
+    return;
   }
 
   // Create collision object for the robot to avoid
@@ -209,16 +222,17 @@ private:
       RCLCPP_ERROR(this->get_logger(), "Could not transform: %s", ex.what());
       return;
     }
-    double distance_threshold = 0.7;
+    double distance_threshold = 0.8;
     while (transformStamped.transform.translation.x > distance_threshold) {
       RCLCPP_INFO(this->get_logger(), "Driving forward to ensure whiteboard is in range, distance: %.2f", transformStamped.transform.translation.x);
       geometry_msgs::msg::Twist cmd_vel_msg;
       if (transformStamped.transform.translation.x < distance_threshold + 0.1)
-        cmd_vel_msg.linear.x = 0.05;
+        cmd_vel_msg.linear.x = 0.005;
       else
-        cmd_vel_msg.linear.x = 0.1;
+        cmd_vel_msg.linear.x = 0.05;
       cmd_vel_msg.angular.z = 0.0;
       cmd_vel_pub_->publish(cmd_vel_msg);
+      rclcpp::sleep_for(std::chrono::milliseconds(100));
 
       try {
         transformStamped = tf_buffer_->lookupTransform(BASE_FRAME, "whiteboard_bb_center", tf2::TimePointZero, tf2::durationFromSec(1.0));
@@ -263,6 +277,7 @@ private:
       else
       {
           RCLCPP_ERROR(this->get_logger(), "Nullspace motion execution failed!");
+          planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
           return;
       }
   }
