@@ -193,6 +193,7 @@ private:
 
         Eigen::Vector3f whiteboard_normal = Eigen::Vector3f(model_coefficients[0], model_coefficients[1], model_coefficients[2]);
         whiteboard_normal = whiteboard_normal.normalized(); // Unit vector
+        RCLCPP_INFO(this->get_logger(), "Whiteboard normalized: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
         if (whiteboard_normal[0] > 0) {
             whiteboard_normal = -whiteboard_normal;
         }
@@ -205,6 +206,7 @@ private:
             }
         }
         
+        RCLCPP_INFO(this->get_logger(), "Whiteboard normal after heuristics: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
 
         // Assume the whiteboard's normal is its "up" (Z) direction
         Eigen::Vector3f world_z(0, 0, 1);
@@ -214,10 +216,10 @@ private:
         Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis));
         quat = quat.normalized();
 
-        RCLCPP_INFO(this->get_logger(), "Whiteboard normal after normalization: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
-        RCLCPP_INFO(this->get_logger(), "Rotation axis: [%f, %f, %f]", rotation_axis[0], rotation_axis[1], rotation_axis[2]);
-        RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
-        RCLCPP_INFO(this->get_logger(), "Quaternion: [%f, %f, %f, %f]", quat.w(), quat.x(), quat.y(), quat.z());
+        
+        //RCLCPP_INFO(this->get_logger(), "Rotation axis: [%f, %f, %f]", rotation_axis[0], rotation_axis[1], rotation_axis[2]);
+        //RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
+        RCLCPP_INFO(this->get_logger(), "Quaternion: [%f, %f, %f, %f]", quat.x(), quat.y(), quat.z(), quat.w());
 
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*cloud, centroid);
@@ -225,6 +227,7 @@ private:
         RCLCPP_INFO(this->get_logger(), "Whiteboard centroid: [%f, %f, %f]", centroid[0], centroid[1], centroid[2]);
 
         Eigen::Vector4f min_pt, max_pt;
+        
         // Create a transform for the base to whiteboard frame
         Eigen::Matrix3f rotation_matrix = quat.toRotationMatrix();
         Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
@@ -240,6 +243,8 @@ private:
         Eigen::Vector3f center;
         center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
 
+        RCLCPP_INFO_STREAM(this->get_logger(), "From whiteboard to base frame: \n" << transform.inverse());
+        RCLCPP_INFO_STREAM(this->get_logger(), "From base to whiteboard frame: \n" << transform);
         RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box min: [%f, %f, %f]", min_pt[0], min_pt[1], min_pt[2]);
         RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box max: [%f, %f, %f]", max_pt[0], max_pt[1], max_pt[2]);
         RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box center: [%f, %f, %f]", center[0], center[1], center[2]);

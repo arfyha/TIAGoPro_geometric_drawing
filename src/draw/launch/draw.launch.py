@@ -4,17 +4,15 @@ from launch_ros.actions import Node
 def generate_launch_description():
     return LaunchDescription([
         Node(
-        package='surface_detection',
-        executable='surface_detector',
-        name='surface_detector',
-        #parameters=[{
-        #    'use_sim_time': True 
-        #}]
+        package='draw',
+        executable='fixed_frame_tf2_broadcaster',
+        name='fixed_frame_tf2_broadcaster',
+        output='screen',
     ),
         Node(
             package='draw',
-            executable='draw_circle_whiteboard',
-            name='draw_circle_whiteboard',
+            executable='draw_function_whiteboard',
+            name='draw_function_whiteboard_node',
             output='screen',
         )
     ])

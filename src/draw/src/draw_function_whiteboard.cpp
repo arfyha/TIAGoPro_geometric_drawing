@@ -69,11 +69,11 @@ public:
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
 
     driveForwardCallback();
-    rclcpp::sleep_for(std::chrono::seconds(10)); // Wait for the robot to stop moving and point cloud setteling
+    rclcpp::sleep_for(std::chrono::seconds(5)); // Wait for the robot to stop moving and point cloud setteling
 
     planning_scene_interface.applyCollisionObject(createCollisionObject());
 
-    rclcpp::sleep_for(std::chrono::seconds(10));
+    rclcpp::sleep_for(std::chrono::seconds(5));
 
     drawFunction();
   }
@@ -121,7 +121,7 @@ private:
       visual_tools_->publishSphere(pose, rviz_visual_tools::RED, rviz_visual_tools::SMALL);
     }
     visual_tools_->trigger();
-    rclcpp::sleep_for(std::chrono::seconds(10));
+    rclcpp::sleep_for(std::chrono::seconds(5));
     //return;
 
     move_group_interface_->setPoseTarget(waypoints.front());
@@ -144,8 +144,8 @@ private:
     rclcpp::sleep_for(std::chrono::seconds(10));
 
     moveit_msgs::msg::RobotTrajectory trajectory;
-    const double jump_threshold = 1000;
-    const double eef_step = 1e-3;
+    const double jump_threshold = 0.0; // No jump threshold
+    const double eef_step = 0.005;
     double fraction = 0.0;
     int attempt = 0;
     int max_attempts = 100;
@@ -173,7 +173,7 @@ private:
     } else {
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
     }
-    rclcpp::sleep_for(std::chrono::seconds(10));
+    rclcpp::sleep_for(std::chrono::seconds(5));
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
     return;
   }

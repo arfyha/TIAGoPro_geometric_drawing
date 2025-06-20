@@ -100,7 +100,8 @@ private:
             min_cluster_dev = 10.0; // Reset to default value
         }
 
-        //RCLCPP_INFO(this->get_logger(), "maximum distance threshold: %f m, divisor: %f", cluster_tolerance, min_cluster_dev);
+        //RCLCPP_INFO(this->get_logger(), "maximum distance threshold: %f", cluster_tolerance);
+        //RCLCPP_INFO(this->get_logger(), "Divisor: %f", min_cluster_dev);
 
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());

@@ -133,6 +133,10 @@ private:
         z_filter_max = this->get_parameter("z_filter_max").get_parameter_value().get<double>();
         nr_k = this->get_parameter("nr_k").get_parameter_value().get<int>();
         stddev_mult = this->get_parameter("stddev_mult").get_parameter_value().get<double>();
+        
+        //RCLCPP_INFO(this->get_logger(), "Voxel leaf size=%f", voxel_leaf_size);
+        //RCLCPP_INFO(this->get_logger(), "Crop box paramter:(%f, %f, %f, %f, %f, %f)", x_filter_min, x_filter_max, y_filter_min, y_filter_max, z_filter_min, z_filter_max);
+        //RCLCPP_INFO(this->get_logger(), "Number of neighbors=%d, Standard deviotion multiplier=%f", nr_k, stddev_mult);
 
         // Transform for pointcloud in world frame
         geometry_msgs::msg::TransformStamped transform;

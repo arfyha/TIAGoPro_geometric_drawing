@@ -33,11 +33,11 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_sub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
   tf2Scalar roll;
-  const double radius_ = 0.1;
+  const double radius_ = 0.2;
   const double center_x_ = 0.75;
   const double center_y_ = -0.0;
   const double center_z_ = 1.0;
-  const int num_points_ = 360;
+  const int num_points_ = 100;
   double x_start = -M_PI;
   double x_end = M_PI;
   double step = (x_end - x_start) / (num_points_ - 1);
@@ -77,7 +77,6 @@ private:
     t.transform.translation.x = msg->poses.at(3).position.x;
     t.transform.translation.y = msg->poses.at(3).position.y;
     t.transform.translation.z = msg->poses.at(3).position.z;
-    t.transform.rotation = msg->poses.at(0).orientation;
     tf_broadcaster_->sendTransform(t);
 
     t.child_frame_id = "function_center";
@@ -97,11 +96,15 @@ private:
     rot_q.setEuler(yaw_angle, pitch_angle, roll_angle);
 
     // Combine the rotations: new_q = orig_q * rot_q
-    tf2::Quaternion new_q = orig_q.operator*=(rot_q);
+    tf2::Quaternion new_q = orig_q * rot_q;
 
     // Set the result as the new orientation
     t.transform.rotation = tf2::toMsg(new_q.normalized());
     tf_broadcaster_->sendTransform(t);
+
+    RCLCPP_INFO(this->get_logger(), "whiteboard orientation: (%f, %f, %f, %f)", orig_q.x(), orig_q.y(), orig_q.z(), orig_q.w());
+    RCLCPP_INFO(this->get_logger(), "fixed rotation: (%f, %f, %f, %f)", rot_q.x(), rot_q.y(), rot_q.z(), rot_q.w());
+    RCLCPP_INFO(this->get_logger(), "quaternion product: (%f, %f, %f, %f)", new_q.x(), new_q.y(), new_q.z(), new_q.w());
 
     // Uncomment the following lines if you want to broadcast a fixed frame for the function center
     /*t.child_frame_id = "function_center_fixed";
@@ -120,7 +123,7 @@ private:
       ti.header.stamp = this->get_clock()->now();
       ti.header.frame_id = "function_center";
       ti.child_frame_id = "function_point_" + std::to_string(i);
-      std::vector<double> point = getRectangleCoordinates().at(i);
+      std::vector<double> point = calculatePointsFunction(i);
       ti.transform.translation.x = -point.at(0);
       ti.transform.translation.y = point.at(1);
       ti.transform.translation.z = -0.25;
@@ -148,7 +151,7 @@ private:
     return degrees * M_PI / 180.0;
   }
 
-  // Returns a 2D array (vector of vectors) holding the coordinates of a rectangle with side length 0.1
+  // Returns a 2D array (vector of vectors) holding the coordinates of a rectangle with side length 0.2
   // The rectangle is represented by num_points_ points, distributed evenly along its perimeter
   std::vector<std::vector<double>> getRectangleCoordinates() {
     double side = 0.2;
