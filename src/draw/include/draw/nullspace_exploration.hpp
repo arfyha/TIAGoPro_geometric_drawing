@@ -13,6 +13,9 @@
 #include <Eigen/SVD>
 #include <std_msgs/msg/float64_multi_array.hpp>
 
+//This file was taken from the bachelor thesis of Darius Kammawie
+
+
 
 Eigen::MatrixXd computeNullspace(const moveit::core::RobotState& robot_state, 
                                  const moveit::core::JointModelGroup* jmg);

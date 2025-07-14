@@ -36,10 +36,19 @@
 
 #include <visualization_msgs/msg/marker_array.hpp>
 
-
+/**
+ * @brief Node for segmenting planes (e.g., whiteboard) from point clouds in ROS 2.
+ *
+ * This node subscribes to a point cloud topic, segments the largest plane using RANSAC,
+ * extracts the plane and the remaining points, computes the plane's pose and bounding box,
+ * and publishes the results as point clouds and pose arrays.
+ */
 class PlaneSegmentationNode : public rclcpp::Node
 {
 public:
+    /**
+     * @brief Constructor. Sets up publishers, parameters, subscriber, and TF2 broadcaster.
+     */
     PlaneSegmentationNode() : Node("plane_segmentation_node", rclcpp::NodeOptions()
     .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
@@ -78,13 +87,10 @@ public:
                     std::bind(&PlaneSegmentationNode::pointCloudCallback, this, std::placeholders::_1)
                 );
 
-        tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
-
         RCLCPP_INFO(this->get_logger(), "Plane Segmentation Node started.");
     }
 
 private:
-    std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
 
     /*
      * Subscriber and Publisher declaration
@@ -103,19 +109,28 @@ private:
     std::string world_frame;
     double threshold;
 
+    /**
+     * @brief Callback for incoming point cloud messages.
+     *
+     * Segments the largest plane using RANSAC, extracts the plane and remaining points,
+     * computes plane pose and bounding box, and publishes results.
+     * @param point_cloud_msg The incoming point cloud message.
+     */
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
+        // Update threshold parameter at runtime
         threshold = this->get_parameter("threshold").get_parameter_value().get<double>();
-
         RCLCPP_INFO(this->get_logger(), "Threshold for plane segmentation: %f", threshold);
 
         // Convert ROS2 msg to PCL PointCloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(*point_cloud_msg, *cloud);
 
+        // Prepare containers for output clouds
         pcl::PointCloud<pcl::PointXYZ>::Ptr filtered_out_cloud (new pcl::PointCloud<pcl::PointXYZ>);
         pcl::PointCloud<pcl::PointXYZ>::Ptr whiteboard_cloud (new pcl::PointCloud<pcl::PointXYZ>);
 
+        // RANSAC plane segmentation
         pcl::SampleConsensusModelPlane<pcl::PointXYZ>::Ptr model_p (new pcl::SampleConsensusModelPlane<pcl::PointXYZ> (cloud));
         pcl::RandomSampleConsensus<pcl::PointXYZ> ransac (model_p);
         std::vector<int> inliers;
@@ -124,6 +139,7 @@ private:
         ransac.getInliers(inliers);
         Eigen::VectorXf model_coefficients;
         ransac.getModelCoefficients(model_coefficients);
+        
         /*Eigen::VectorXf optimzed_model_coefficients;
         model_p->optimizeModelCoefficients(inliers, model_coefficients, optimzed_model_coefficients);
         RCLCPP_INFO(this->get_logger(), "Optimized model coefficients: [%f, %f, %f, %f]", 
@@ -151,20 +167,27 @@ private:
         extract.setNegative (true);
         extract.filter (*filtered_out_cloud);
 
-        // Create a Concave Hull representation of the projected inliers
+        // Optionally compute concave hull (commented out)
         /*pcl::PointCloud<pcl::PointXYZ>::Ptr cloud_hull (new pcl::PointCloud<pcl::PointXYZ>);
         pcl::ConcaveHull<pcl::PointXYZ> chull;
         chull.setInputCloud (whiteboard_cloud);
         chull.setAlpha (0.1);
         chull.reconstruct (*cloud_hull);*/
 
+        // Compute pose and bounding box of the segmented plane
         computeWhiteboardProperties(whiteboard_cloud, model_coefficients);
 
+        // Publish segmented clouds
         this->publishPointCloud(plane_pub_, *whiteboard_cloud);
         this->publishPointCloud(plane_seg_pub_, *filtered_out_cloud);
         //this->publishPointCloud(chull_pub_, *cloud_hull);
     }
 
+    /**
+     * @brief Publishes a PCL point cloud as a ROS 2 PointCloud2 message.
+     * @param publisher The publisher to use.
+     * @param point_cloud The point cloud to publish.
+     */
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,
         pcl::PointCloud<pcl::PointXYZ> &point_cloud) 
     {
@@ -175,6 +198,13 @@ private:
     publisher->publish(*pc2_cloud);
     }
 
+    /**
+     * @brief Utility for parameter handling: declares or gets a parameter.
+     * @tparam T Parameter type.
+     * @param name Parameter name.
+     * @param default_value Default value if parameter is not set.
+     * @return Parameter value.
+     */
     template<typename T>
     T get_or_create_parameter(const std::string & name, const T & default_value)
     {
@@ -188,9 +218,15 @@ private:
         return value;
     }
 
+    /**
+     * @brief Computes pose and bounding box of the segmented plane, publishes as PoseArray.
+     * @param cloud Point cloud of the plane inliers.
+     * @param model_coefficients Plane model coefficients from RANSAC.
+     */
     void computeWhiteboardProperties(pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, 
                                    const Eigen::VectorXf & model_coefficients){
 
+        // Extract and normalize the plane normal
         Eigen::Vector3f whiteboard_normal = Eigen::Vector3f(model_coefficients[0], model_coefficients[1], model_coefficients[2]);
         whiteboard_normal = whiteboard_normal.normalized(); // Unit vector
         RCLCPP_INFO(this->get_logger(), "Whiteboard normalized: [%f, %f, %f]", whiteboard_normal[0], whiteboard_normal[1], whiteboard_normal[2]);
@@ -211,6 +247,7 @@ private:
         // Assume the whiteboard's normal is its "up" (Z) direction
         Eigen::Vector3f world_z(0, 0, 1);
 
+        // Compute rotation from world Z to whiteboard normal
         Eigen::Vector3f rotation_axis = (world_z.cross(whiteboard_normal)).normalized();
         float rotation_angle = std::acos(world_z.dot(whiteboard_normal) / (world_z.norm() * whiteboard_normal.norm()));
         Eigen::Quaternionf quat(Eigen::AngleAxisf(rotation_angle, rotation_axis));
@@ -221,14 +258,13 @@ private:
         //RCLCPP_INFO(this->get_logger(), "Rotation angle: %f", rotation_angle);
         RCLCPP_INFO(this->get_logger(), "Quaternion: [%f, %f, %f, %f]", quat.x(), quat.y(), quat.z(), quat.w());
 
+        // Compute centroid of the plane
         Eigen::Vector4f centroid;
         pcl::compute3DCentroid(*cloud, centroid);
-
         RCLCPP_INFO(this->get_logger(), "Whiteboard centroid: [%f, %f, %f]", centroid[0], centroid[1], centroid[2]);
 
+        // Compute bounding box in whiteboard frame
         Eigen::Vector4f min_pt, max_pt;
-        
-        // Create a transform for the base to whiteboard frame
         Eigen::Matrix3f rotation_matrix = quat.toRotationMatrix();
         Eigen::Matrix4f transform = Eigen::Matrix4f::Identity();
         transform.block<3,3>(0,0) = rotation_matrix.transpose(); // Inverse rotation
@@ -240,6 +276,7 @@ private:
         min_pt = transform.inverse() * min_pt_whiteboard;
         max_pt = transform.inverse() * max_pt_whiteboard;
 
+        // Compute center of bounding box
         Eigen::Vector3f center;
         center = (max_pt.head<3>() + min_pt.head<3>()) / 2;
 
@@ -249,6 +286,7 @@ private:
         RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box max: [%f, %f, %f]", max_pt[0], max_pt[1], max_pt[2]);
         RCLCPP_INFO(this->get_logger(), "Whiteboard bounding box center: [%f, %f, %f]", center[0], center[1], center[2]);
 
+        // Publish pose array with whiteboard pose, min/max points, and bounding box center
         geometry_msgs::msg::PoseArray pose_array;
         pose_array.header.stamp = this->get_clock()->now();
         pose_array.header.frame_id = world_frame;
@@ -286,6 +324,9 @@ private:
 
 };
 
+/**
+ * @brief Main function. Initializes ROS 2, spins the node, and shuts down.
+ */
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);

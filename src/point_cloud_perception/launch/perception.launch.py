@@ -1,7 +1,20 @@
 from launch import LaunchDescription
 from launch_ros.actions import Node
 
+# -----------------------------------------------------------------------------
+# Launch file for starting the point cloud perception pipeline nodes
+# -----------------------------------------------------------------------------
 def generate_launch_description():
+    """
+    Generates the launch description for the point cloud perception pipeline.
+
+    This launch file starts:
+    - pre_process_node: Filters and transforms the raw point cloud data.
+    - euclidean_cluster_node: Performs Euclidean clustering to segment objects.
+    - plane_segmentation_node: Segments the largest plane (e.g., whiteboard) from clusters.
+
+    Each node is launched with its parameters and output shown on the screen.
+    """
     return LaunchDescription([
         Node(
             package='point_cloud_perception',

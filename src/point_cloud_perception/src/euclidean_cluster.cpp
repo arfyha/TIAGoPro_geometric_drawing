@@ -25,10 +25,18 @@
 #include <pcl/segmentation/extract_clusters.h>
 #include <pcl/segmentation/extract_polygonal_prism_data.h>
 
-
+/**
+ * @brief Node for performing Euclidean clustering on point clouds in ROS 2.
+ *
+ * This node subscribes to a filtered point cloud topic, performs Euclidean cluster extraction,
+ * identifies the cluster in front of the robot (y ≈ 0), and publishes the clusters as separate topics.
+ */
 class EuclideanClusterNode : public rclcpp::Node
 {
 public:
+    /**
+     * @brief Constructor. Sets up publishers, parameters, subscriber, and logs startup.
+     */
     EuclideanClusterNode() : Node("euclidean_cluster_node", rclcpp::NodeOptions()
     .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
@@ -89,12 +97,20 @@ private:
     double min_cluster_dev ;
     std::size_t index;
 
+    /**
+     * @brief Callback for incoming point cloud messages.
+     *
+     * Performs Euclidean cluster extraction, finds the cluster with y ≈ 0, and publishes clusters.
+     * @param point_cloud_msg The incoming point cloud message.
+     */
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
+        // Update parameters at runtime
         cluster_tolerance = this->get_parameter("cluster_tolerance").get_parameter_value().get<double>();
         min_cluster_dev = (this->get_parameter("min_cluster_dev").get_parameter_value().get<double>());
         index = size_t(this->get_parameter("index").get_parameter_value().get<int>());
         
+        // Validate min_cluster_dev parameter
         if(min_cluster_dev < 1.0 || min_cluster_dev > 100.0) {
             RCLCPP_ERROR(this->get_logger(), "Invalid min_cluster_dev value: %f. It should be between 1 and 100.", min_cluster_dev);
             min_cluster_dev = 10.0; // Reset to default value
@@ -111,6 +127,7 @@ private:
         pcl::search::KdTree<pcl::PointXYZ>::Ptr tree (new pcl::search::KdTree<pcl::PointXYZ>);
         tree->setInputCloud (cloud);
 
+        // Set up Euclidean cluster extraction
         std::vector<pcl::PointIndices> cluster_indices;
         pcl::EuclideanClusterExtraction<pcl::PointXYZ> ec;
         ec.setClusterTolerance (cluster_tolerance);
@@ -123,6 +140,7 @@ private:
         ec.setInputCloud (cloud);
         ec.extract (cluster_indices);
 
+        // Store clusters and find the cluster with y ≈ 0 (in front of robot)
         std::vector<pcl::PointCloud<pcl::PointXYZ>::Ptr > clusters;
         int whiteboard_index = -1;
         int i = 0;
@@ -140,6 +158,7 @@ private:
             cloud_cluster->is_dense = true;
             clusters.push_back(cloud_cluster);
 
+            // Identify cluster containing points with y ≈ 0
             for (auto& point : cloud_cluster->points) {
                 if (std::abs(point.y) < 0.05) {
                     whiteboard_index = i;
@@ -147,6 +166,8 @@ private:
             }
             i++;
         }
+        // Publish selected clusters
+        if (clusters.empty()) return;
         //RCLCPP_INFO(this->get_logger(), "Number clusters '%lu', whiteboard index '%d'", clusters.size(), whiteboard_index);        if (clusters.empty()) return;
         for (size_t i = 0; i < clusters.size(); ++i) {
             //RCLCPP_INFO(this->get_logger(), "Cluster %zu has '%lu' points", i, clusters.at(i)->points.size());
@@ -155,6 +176,11 @@ private:
         if (whiteboard_index > -1) this->publishPointCloud(whiteboard_cluster_pub_, *clusters.at(whiteboard_index));
     }
 
+    /**
+     * @brief Publishes a PCL point cloud as a ROS 2 PointCloud2 message.
+     * @param publisher The publisher to use.
+     * @param point_cloud The point cloud to publish.
+     */
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,
         pcl::PointCloud<pcl::PointXYZ> &point_cloud) 
     {
@@ -165,6 +191,13 @@ private:
     publisher->publish(*pc2_cloud);
     }
 
+    /**
+     * @brief Utility for parameter handling: declares or gets a parameter.
+     * @tparam T Parameter type.
+     * @param name Parameter name.
+     * @param default_value Default value if parameter is not set.
+     * @return Parameter value.
+     */
     template<typename T>
     T get_or_create_parameter(const std::string & name, const T & default_value)
     {
@@ -180,6 +213,9 @@ private:
 
 };
 
+/**
+ * @brief Main function. Initializes ROS 2, spins the node, and shuts down.
+ */
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);

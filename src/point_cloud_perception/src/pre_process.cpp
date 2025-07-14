@@ -20,10 +20,19 @@
 #include <pcl_ros/transforms.hpp>
 #include <pcl/filters/statistical_outlier_removal.h>
 
-
+/**
+ * @brief Node for preprocessing point clouds in ROS 2.
+ *
+ * This node subscribes to a raw point cloud topic, transforms the cloud to a target frame,
+ * applies voxel grid, crop box, and statistical outlier removal filters, and publishes
+ * the results to various topics.
+ */
 class PreProcessNode : public rclcpp::Node
 {
 public:
+    /**
+     * @brief Constructor. Sets up publishers, parameters, subscriber, and TF2.
+     */
     PreProcessNode() : Node("pre_process_node", rclcpp::NodeOptions()
     .allow_undeclared_parameters(true)
     .automatically_declare_parameters_from_overrides(true))
@@ -72,7 +81,7 @@ public:
                 );
 
         /*
-         * SET UP TF.
+         * SET UP TF2.
          * 
          */
         tf_buffer_   = std::make_unique<tf2_ros::Buffer>(this->get_clock());
@@ -115,6 +124,14 @@ private:
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
     std::unique_ptr<tf2_ros::TransformBroadcaster> br;
 
+
+    /**
+     * @brief Callback for incoming point cloud messages.
+     * 
+     * Transforms the point cloud to the target frame, applies filters, and publishes results.
+     * 
+     * @param point_cloud_msg The incoming point cloud message.
+     */
     void pointCloudCallback(const sensor_msgs::msg::PointCloud2::SharedPtr point_cloud_msg)
     {
         // Publishing orginal cloud with differnt header (just for visualization)
@@ -123,7 +140,7 @@ private:
         this->publishPointCloud(org_cloud_oub, *org_cloud);
         //RCLCPP_INFO(this->get_logger(), "Received point cloud with %zu points", org_cloud->size());
 
-        // Get parameters
+        // Update parameters at runtime (for dynamic reconfigure)
         voxel_leaf_size = float(this->get_parameter("voxel_leaf_size").get_parameter_value().get<double>());
         x_filter_min = this->get_parameter("x_filter_min").get_parameter_value().get<double>();
         x_filter_max = this->get_parameter("x_filter_max").get_parameter_value().get<double>();
@@ -152,28 +169,33 @@ private:
         sensor_msgs::msg::PointCloud2 transformed_cloud;
         pcl_ros::transformPointCloud(world_frame, transform, *point_cloud_msg, transformed_cloud);
 
-        // Convert ROS2 msg to PCL PointCloud
+        // Convert transformed cloud to PCL format
         pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>());
         pcl::fromROSMsg(transformed_cloud, *cloud);
         //RCLCPP_INFO(this->get_logger(), "Transformed point cloud with %zu points", cloud->size());
         this->publishPointCloud(trans_cloud_pub_, *cloud);
         
-        // Publish voxel filtered cloud
+        // Apply voxel grid filter and publish
         pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_cloud = voxel_filter(cloud);
         this->publishPointCloud(voxel_pub_, *voxel_cloud);
         //RCLCPP_INFO(this->get_logger(), "Voxel filtered point cloud with %zu points", voxel_cloud->size());
 
-        // Publish crop filtered cloud
+        // Apply crop box filter and publish
         pcl::PointCloud<pcl::PointXYZ>::Ptr crop_cloud = crop_box_filter(voxel_cloud);
         this->publishPointCloud(crop_pub_, *crop_cloud);
         //RCLCPP_INFO(this->get_logger(), "Cropped point cloud with %zu points", crop_cloud->size());
 
-        // Publish pre-processed cloud
+        // Apply statistical outlier removal and publish pre-processed cloud
         pcl::PointCloud<pcl::PointXYZ>::Ptr pre_processed_cloud = sor_filter(crop_box_filter(voxel_filter(cloud)));
         this->publishPointCloud(pre_process_pub_, *pre_processed_cloud);
         //RCLCPP_INFO(this->get_logger(), "Pre-processed point cloud with %zu points", pre_processed_cloud->size());
     }
 
+    /**
+     * @brief Applies a voxel grid filter to downsample the point cloud.
+     * @param point_cloud Input point cloud.
+     * @return Filtered point cloud.
+     */
     pcl::PointCloud<pcl::PointXYZ>::Ptr voxel_filter(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud){
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>);
@@ -187,6 +209,11 @@ private:
         return filtered;
     }
 
+    /**
+     * @brief Applies a crop box filter to the point cloud.
+     * @param point_cloud Input point cloud.
+     * @return Filtered point cloud.
+     */
     pcl::PointCloud<pcl::PointXYZ>::Ptr crop_box_filter(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud){
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>);
@@ -203,6 +230,11 @@ private:
         return filtered;
     }
 
+    /**
+     * @brief Applies a statistical outlier removal filter to the point cloud.
+     * @param point_cloud Input point cloud.
+     * @return Filtered point cloud.
+     */
     pcl::PointCloud<pcl::PointXYZ>::Ptr sor_filter(pcl::PointCloud<pcl::PointXYZ>::Ptr point_cloud){
 
         pcl::PointCloud<pcl::PointXYZ>::Ptr filtered(new pcl::PointCloud<pcl::PointXYZ>);
@@ -217,6 +249,11 @@ private:
         return filtered;
     }
 
+    /**
+     * @brief Publishes a PCL point cloud as a ROS 2 PointCloud2 message.
+     * @param publisher The publisher to use.
+     * @param point_cloud The point cloud to publish.
+     */
     void publishPointCloud(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr publisher,
         pcl::PointCloud<pcl::PointXYZ> &point_cloud) 
     {
@@ -227,6 +264,13 @@ private:
     publisher->publish(*pc2_cloud);
     }
 
+    /**
+     * @brief Utility for parameter handling: declares or gets a parameter.
+     * @tparam T Parameter type.
+     * @param name Parameter name.
+     * @param default_value Default value if parameter is not set.
+     * @return Parameter value.
+     */
     template<typename T>
     T get_or_create_parameter(const std::string & name, const T & default_value)
     {
@@ -241,6 +285,9 @@ private:
     }
 };
 
+/**
+ * @brief Main function. Initializes ROS 2, spins the node, and shuts down.
+ */
 int main(int argc, char **argv)
 {
     rclcpp::init(argc, argv);

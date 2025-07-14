@@ -19,28 +19,39 @@
 #include <draw/nullspace_exploration.hpp>
 #include <geometry_msgs/msg/twist.hpp>
 
+// Node and robot configuration constants
 static const std::string NODE_NAME = "draw_function_whiteboard_node";
 static const std::string PLANNING_GROUP = "arm_right";
 static const std::string BASE_FRAME = "base_footprint";
 static const std::string END_EFFECTOR_LINK = "arm_right_tool_link";
 //set head_link to -0.64
 
+/**
+ * @brief Main node for drawing functions on a whiteboard.
+ */
 class DrawFunctionWhiteboardNode : public rclcpp::Node {
 public:
+  /**
+   * @brief Constructor.
+   */
   DrawFunctionWhiteboardNode()
     : Node(NODE_NAME, rclcpp::NodeOptions()
       .automatically_declare_parameters_from_overrides(true)) 
     {
-    // Set use_sim_time = true
-    //this->declare_parameter("use_sim_time", true);
+    // Set up TF2 buffer and listener for transforms
     tf_buffer_   = std::make_unique<tf2_ros::Buffer>(this->get_clock());
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     br = std::make_unique<tf2_ros::TransformBroadcaster>(*this);
 
+    // Publisher for robot base velocity
     cmd_vel_pub_ = this->create_publisher<geometry_msgs::msg::Twist>("/cmd_vel", 10);
   }
 
+  /**
+   * @brief Initializes MoveIt interfaces, visual tools, collision objects, and starts drawing.
+   */
   void initialize() {
+    // Set up MoveIt planning interface for the robot arm
     move_group_interface_ = std::make_shared<moveit::planning_interface::MoveGroupInterface>(shared_from_this(), PLANNING_GROUP);
     move_group_interface_->setPlannerId("RRTConnectkConfigDefault");
     move_group_interface_->setPoseReferenceFrame(BASE_FRAME);
@@ -50,49 +61,62 @@ public:
     move_group_interface_->setMaxVelocityScalingFactor(1.0);
     move_group_interface_->setMaxAccelerationScalingFactor(1.0);
 
+    // Set up MoveIt visual tools for RViz visualization
     visual_tools_ = std::make_shared<moveit_visual_tools::MoveItVisualTools>(
       shared_from_this(), BASE_FRAME, rviz_visual_tools::RVIZ_MARKER_TOPIC,
       move_group_interface_->getRobotModel()
     );
-
     visual_tools_->deleteAllMarkers();
     visual_tools_->loadRemoteControl();
     visual_tools_->setBaseFrame(move_group_interface_->getPlanningFrame());
     visual_tools_->loadMarkerPub(true);
     visual_tools_->trigger();
 
+    // Nullspace exploration for joint optimization
     nullspace_explorer_ = std::make_shared<NullspaceExplorationNode>();
     robot_model_ = move_group_interface_->getRobotModel();
     jmg_ = robot_model_->getJointModelGroup(PLANNING_GROUP);
 
-    // Remove all collision objects from the scene
+    // Remove all existing collision objects from the scene
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
 
+    // Drive the robot base forward until the whiteboard is in range
     driveForwardCallback();
-    rclcpp::sleep_for(std::chrono::seconds(5)); // Wait for the robot to stop moving and point cloud setteling
+    rclcpp::sleep_for(std::chrono::seconds(5)); // Wait for robot and sensors to settle
 
-    planning_scene_interface.applyCollisionObject(createCollisionObject());
+    // Add whiteboard collision object to the planning scene
+    planning_scene_interface.applyCollisionObject(createCollisionObject()); // Wait for collision object to be applied
+    //return;
+    //rclcpp::sleep_for(std::chrono::seconds(5));
 
-    rclcpp::sleep_for(std::chrono::seconds(5));
-
+    // Start the drawing function
     drawFunction();
   }
 
 private:
+  // MoveIt and visualization interfaces
   std::shared_ptr<moveit::planning_interface::MoveGroupInterface> move_group_interface_;
   std::shared_ptr<moveit_visual_tools::MoveItVisualTools> visual_tools_;
   moveit::planning_interface::PlanningSceneInterface planning_scene_interface;
   
+  // Nullspace exploration for joint optimization
   std::shared_ptr<NullspaceExplorationNode> nullspace_explorer_;
   moveit::core::RobotModelConstPtr robot_model_;
   const moveit::core::JointModelGroup* jmg_;
 
+  // TF2 interfaces
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
   std::unique_ptr<tf2_ros::TransformBroadcaster> br;
 
+  // Publisher for robot velocity
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_pub_;
 
+
+  /**
+   * @brief Publishes a text marker in RViz.
+   * @param text The text to display.
+   */
   void drawTitle(const std::string &text) {
     Eigen::Isometry3d text_pose = Eigen::Isometry3d::Identity();
     text_pose.translation().x() = 1.0;
@@ -100,8 +124,12 @@ private:
     visual_tools_->publishText(text_pose, text, rviz_visual_tools::WHITE, rviz_visual_tools::XLARGE);
   }
 
+  /**
+   * @brief Plans and executes the drawing trajectory, visualizes waypoints and trajectory lines.
+   */
   void drawFunction() {
     std::vector<geometry_msgs::msg::Pose> waypoints;
+    // Collect waypoints by transforming function points to BASE_FRAME
     for (int i = 0; i < 100; ++i) {
       geometry_msgs::msg::TransformStamped transformStamped;
       try {
@@ -116,18 +144,20 @@ private:
       pose.position.z = transformStamped.transform.translation.z;
       pose.orientation = transformStamped.transform.rotation;
 
-      //auto pose_ = calculatePose(i);
       waypoints.push_back(pose);
+      // Visualize each waypoint as a red sphere in RViz
       visual_tools_->publishSphere(pose, rviz_visual_tools::RED, rviz_visual_tools::SMALL);
     }
     visual_tools_->trigger();
-    rclcpp::sleep_for(std::chrono::seconds(5));
     //return;
+    //rclcpp::sleep_for(std::chrono::seconds(5));
 
+    // Plan to the initial pose
     move_group_interface_->setPoseTarget(waypoints.front());
     moveit::planning_interface::MoveGroupInterface::Plan plan;
     auto success = move_group_interface_->plan(plan);
-    if (success == moveit::core::MoveItErrorCode::SUCCESS) { 
+    if (success == moveit::core::MoveItErrorCode::SUCCESS) {
+      // Visualize the planned trajectory line in green
       visual_tools_->publishTrajectoryLine(plan.trajectory_, jmg_, rviz_visual_tools::GREEN);
       visual_tools_->trigger();
       move_group_interface_->execute(plan);
@@ -141,8 +171,9 @@ private:
     }
 
     //waypoints.push_back(waypoints.front());
-    rclcpp::sleep_for(std::chrono::seconds(10));
+    //rclcpp::sleep_for(std::chrono::seconds(5));
 
+    // Plan Cartesian path through waypoints
     moveit_msgs::msg::RobotTrajectory trajectory;
     const double jump_threshold = 0.0; // No jump threshold
     const double eef_step = 0.005;
@@ -161,10 +192,13 @@ private:
     if (fraction >= path_coverage) {
         RCLCPP_INFO(this->get_logger(), "Successfully planned Cartesian path with %.2f%% coverage.", fraction * 100.0);
 
+        // Visualize the Cartesian trajectory line in blue
         //drawTitle("Execute_Cartesian_Path");
         visual_tools_->publishTrajectoryLine(trajectory, jmg_, rviz_visual_tools::BLUE);
         visual_tools_->trigger();
         //return;
+
+        // Execute the Cartesian path
         moveit::planning_interface::MoveGroupInterface::Plan plan;
         plan.trajectory_ = trajectory;
         move_group_interface_->execute(plan);
@@ -173,12 +207,17 @@ private:
     } else {
         RCLCPP_ERROR(this->get_logger(), "Failed to plan Cartesian path with sufficient coverage after %d attempts.", max_attempts);
     }
-    rclcpp::sleep_for(std::chrono::seconds(5));
+    rclcpp::sleep_for(std::chrono::seconds(10));
     planning_scene_interface.removeCollisionObjects(planning_scene_interface.getKnownObjectNames());
+    visual_tools_->deleteAllMarkers();
+    visual_tools_->trigger();
     return;
   }
 
-  // Create collision object for the robot to avoid
+  /**
+   * @brief Creates a collision object for the whiteboard and adds it to the planning scene.
+   * @return Collision object message.
+   */
   moveit_msgs::msg::CollisionObject createCollisionObject(){
     moveit_msgs::msg::CollisionObject collision_object;
     collision_object.header.frame_id = "whiteboard_bb_center";
@@ -214,6 +253,9 @@ private:
     return collision_object;
   }
 
+  /**
+   * @brief Drives the robot base forward until the whiteboard is within a threshold distance.
+   */
   void driveForwardCallback(){
     geometry_msgs::msg::TransformStamped transformStamped;
     try {
@@ -248,6 +290,11 @@ private:
     cmd_vel_pub_->publish(cmd_vel_msg);
   }
 
+  /**
+   * @brief Explores nullspace for joint optimization and executes the resulting trajectory.
+   * @param plan The initial planned trajectory.
+   * This function is taken from the bachelor thesis of Darius Kammawie
+   */
   void nullspaceExploration(moveit::planning_interface::MoveGroupInterface::Plan plan){
       //Nullspace exploration
       move_group_interface_->clearPoseTargets();
@@ -283,6 +330,9 @@ private:
   }
 };
 
+/**
+ * @brief Main entry point. Initializes ROS, starts the node, and spins.
+ */
 int main(int argc, char * argv[]) {
   rclcpp::init(argc, argv);
 

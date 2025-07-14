@@ -1,5 +1,6 @@
 #include "draw/nullspace_exploration.hpp"
 
+//This file was taken from the bachelor thesis of Darius Kammawie
 
 NullspaceExplorationNode::NullspaceExplorationNode() : Node("nullspace_exploration")
 {

@@ -15,24 +15,38 @@
 
 using namespace std::chrono_literals;
 
+/**
+ * @brief Node that broadcasts fixed TF2 frames for whiteboard and function points.
+ */
 class FixedFrameBroadcaster : public rclcpp::Node
 {
 public:
+  /**
+   * @brief Constructor. Initializes TF2 broadcaster and subscribes to pose array.
+   */
   FixedFrameBroadcaster()
   : Node("fixed_frame_tf2_broadcaster")
   {
+    // TF2 broadcaster for publishing transforms
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(this);
+    
+    // Subscribe to pose array topic for whiteboard poses
     pose_array_sub_ = this->create_subscription<geometry_msgs::msg::PoseArray>(
       "/whiteboard_pose", 10,
       std::bind(&FixedFrameBroadcaster::poseArrayCallback, this, std::placeholders::_1));
 
-      roll = degToRad(this->declare_parameter("deg", 90.0));
+    // Get roll angle from parameter (default 90 degrees)
+    // Uncomment to broadcast a fixed frame for the function center
+    //roll = degToRad(this->declare_parameter("deg", 90.0));
   }
 
 private:
+  // Subscription to whiteboard info and tf2 broadcaster
   rclcpp::Subscription<geometry_msgs::msg::PoseArray>::SharedPtr pose_array_sub_;
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
-  tf2Scalar roll;
+
+  // Function paramerters
+  //tf2Scalar roll;
   const double radius_ = 0.2;
   const double center_x_ = 0.75;
   const double center_y_ = -0.0;
@@ -46,14 +60,21 @@ private:
   double scale_y = 10.0;
 
 
+  /**
+   * @brief Callback for incoming whiteboard pose array.
+   *        Broadcasts transforms for whiteboard properties and function points.
+   * @param msg Shared pointer to PoseArray message.
+   */
   void poseArrayCallback(const geometry_msgs::msg::PoseArray::SharedPtr msg){
 
-    roll = degToRad(this->get_parameter("deg").as_double());
+    // Uncomment the following lines if you want to broadcast a fixed frame for the function center
+    //roll = degToRad(this->get_parameter("deg").as_double());
 
     geometry_msgs::msg::TransformStamped t;
     t.header.stamp = this->get_clock()->now();
     t.header.frame_id = "base_footprint";
 
+    // Broadcast transforms for whiteboard properties
     t.child_frame_id = "whiteboard_center";
     t.transform.translation.x = msg->poses.at(0).position.x;
     t.transform.translation.y = msg->poses.at(0).position.y;
@@ -79,6 +100,7 @@ private:
     t.transform.translation.z = msg->poses.at(3).position.z;
     tf_broadcaster_->sendTransform(t);
 
+    // Broadcast transform for function center
     t.child_frame_id = "function_center";
     t.transform.translation.x = msg->poses.at(0).position.x;
     t.transform.translation.y = msg->poses.at(0).position.y;
@@ -102,9 +124,9 @@ private:
     t.transform.rotation = tf2::toMsg(new_q.normalized());
     tf_broadcaster_->sendTransform(t);
 
-    RCLCPP_INFO(this->get_logger(), "whiteboard orientation: (%f, %f, %f, %f)", orig_q.x(), orig_q.y(), orig_q.z(), orig_q.w());
-    RCLCPP_INFO(this->get_logger(), "fixed rotation: (%f, %f, %f, %f)", rot_q.x(), rot_q.y(), rot_q.z(), rot_q.w());
-    RCLCPP_INFO(this->get_logger(), "quaternion product: (%f, %f, %f, %f)", new_q.x(), new_q.y(), new_q.z(), new_q.w());
+    //RCLCPP_INFO(this->get_logger(), "whiteboard orientation: (%f, %f, %f, %f)", orig_q.x(), orig_q.y(), orig_q.z(), orig_q.w());
+    //RCLCPP_INFO(this->get_logger(), "fixed rotation: (%f, %f, %f, %f)", rot_q.x(), rot_q.y(), rot_q.z(), rot_q.w());
+    //RCLCPP_INFO(this->get_logger(), "quaternion product: (%f, %f, %f, %f)", new_q.x(), new_q.y(), new_q.z(), new_q.w());
 
     // Uncomment the following lines if you want to broadcast a fixed frame for the function center
     /*t.child_frame_id = "function_center_fixed";
@@ -118,12 +140,13 @@ private:
     t.transform.rotation = q_msg_;
     tf_broadcaster_->sendTransform(t);*/
 
+    // Broadcast transforms for each function point
     for (int i = 0; i < num_points_; ++i) {
       geometry_msgs::msg::TransformStamped ti;
       ti.header.stamp = this->get_clock()->now();
       ti.header.frame_id = "function_center";
       ti.child_frame_id = "function_point_" + std::to_string(i);
-      std::vector<double> point = calculatePointsFunction(i);
+      std::vector<double> point = getRectangleCoordinates().at(i);
       ti.transform.translation.x = -point.at(0);
       ti.transform.translation.y = point.at(1);
       ti.transform.translation.z = -0.25;
@@ -132,14 +155,22 @@ private:
     }
   }
 
-  // Calculate the i-th point in the function
-  // The function is scaled to fit within the specified range
+  /**
+   * @brief Calculates the i-th point of a scaled function (e.g., sine).
+   * @param i Index of the point.
+   * @return Vector with x and y coordinates.
+   */
   std::vector<double> calculatePointsFunction(int i) {
     double x = x_start + i * step;
     double y = function(x);
     return {x/scale_x, y/scale_y};
   }
 
+  /**
+   * @brief Calculates the i-th point on a circle.
+   * @param i Index of the point.
+   * @return Vector with x and y coordinates.
+   */
   std::vector<double> calculateCirclePoints(int i) {
     double angle = 2 * M_PI * i / num_points_;
     double x = radius_ * std::cos(angle);
@@ -147,12 +178,19 @@ private:
     return {x, y};
   }
 
+  /**
+   * @brief Converts degrees to radians.
+   * @param degrees Angle in degrees.
+   * @return Angle in radians.
+   */
   double degToRad(double degrees) {
     return degrees * M_PI / 180.0;
   }
 
-  // Returns a 2D array (vector of vectors) holding the coordinates of a rectangle with side length 0.2
-  // The rectangle is represented by num_points_ points, distributed evenly along its perimeter
+  /**
+   * @brief Returns coordinates for points distributed along a rectangle perimeter.
+   * @return Vector of vectors with x and y coordinates.
+   */
   std::vector<std::vector<double>> getRectangleCoordinates() {
     double side = 0.2;
     double half = side / 2.0;
@@ -182,6 +220,9 @@ private:
   }
 };
 
+/**
+ * @brief Main entry point. Initializes ROS, starts the node, and spins.
+ */
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);

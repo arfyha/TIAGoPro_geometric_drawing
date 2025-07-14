@@ -11,12 +11,22 @@
 #include <tf2_eigen/tf2_eigen.hpp>
 #include <tf2_ros/static_transform_broadcaster.h>
 
+/**
+ * @brief Node for broadcasting a static transform from the robot's end effector to the pen tip.
+ *
+ * This node publishes a static TF2 transform between "arm_right_tool_link" and "pen_tip",
+ * representing the fixed offset of the pen tip from the robot's tool link.
+ */
 class StaticFrameBroadcaster : public rclcpp::Node
 {
 public:
+  /**
+   * @brief Constructor. Initializes the static transform broadcaster and broadcasts transforms.
+   */
   StaticFrameBroadcaster()
   : Node("frame_broadcaster")
   {
+    // Create the static transform broadcaster
     tf_broadcaster_ = std::make_shared<tf2_ros::StaticTransformBroadcaster>(this);
 
     // Broadcast the static transforms
@@ -24,8 +34,15 @@ public:
   }
 
 private:
+  // Static transform broadcaster object
   std::shared_ptr<tf2_ros::StaticTransformBroadcaster> tf_broadcaster_;
 
+  /**
+   * @brief Broadcasts the static transform from "arm_right_tool_link" to "pen_tip".
+   *
+   * The transform places "pen_tip" 0.25 meters along the z-axis of "arm_right_tool_link".
+   * The orientation is identity (no rotation).
+   */
   void broadcastTransforms() {
     // Broadcast the center transform
     geometry_msgs::msg::TransformStamped t;
@@ -43,6 +60,9 @@ private:
   }
 };
 
+/**
+ * @brief Main entry point. Initializes ROS, starts the node, and spins.
+ */
 int main(int argc, char * argv[])
 {
   rclcpp::init(argc, argv);
